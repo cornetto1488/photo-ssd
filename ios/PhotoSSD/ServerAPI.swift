@@ -6,6 +6,8 @@ struct ServerStatus: Decodable {
     let free: Int64
     let total: Int64
     let files: Int
+    let trash: Int?
+    let trashBytes: Int64?
 }
 
 struct ServerRecord: Decodable {
@@ -84,13 +86,17 @@ enum ServerAPI {
         try check(resp, data)
     }
 
-    static func uploadRequest(path: String, id: String, size: Int64, mtime: Date) throws -> URLRequest {
-        var r = try request("api/v1/upload", query: [
+    static func uploadRequest(path: String, id: String, size: Int64, mtime: Date, kind: String, album: String?) throws -> URLRequest {
+        var q: [URLQueryItem] = [
             .init(name: "path", value: path),
             .init(name: "id", value: id),
             .init(name: "size", value: String(size)),
-            .init(name: "mtime", value: String(Int64(mtime.timeIntervalSince1970)))
-        ], method: "PUT")
+            .init(name: "mtime", value: String(Int64(mtime.timeIntervalSince1970))),
+            .init(name: "date", value: String(Int64(mtime.timeIntervalSince1970))),
+            .init(name: "kind", value: kind)
+        ]
+        if let album, !album.isEmpty { q.append(.init(name: "album", value: album)) }
+        var r = try request("api/v1/upload", query: q, method: "PUT")
         r.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         r.timeoutInterval = 600
         return r

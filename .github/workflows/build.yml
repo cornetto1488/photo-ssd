@@ -29,11 +29,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Fonts (Google Fonts, OFL)
         run: |
-          mkdir -p ios/PhotoSSD/Fonts
-          curl -fsSL -o ios/PhotoSSD/Fonts/Onest.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/onest/Onest%5Bwght%5D.ttf"
-          curl -fsSL -o ios/PhotoSSD/Fonts/Inter.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
-          curl -fsSL -o ios/PhotoSSD/Fonts/JetBrainsMono.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
-          ls -la ios/PhotoSSD/Fonts
+          mkdir -p ios/Shared/Fonts
+          curl -fsSL -o ios/Shared/Fonts/Onest.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/onest/Onest%5Bwght%5D.ttf"
+          curl -fsSL -o ios/Shared/Fonts/Inter.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
+          curl -fsSL -o ios/Shared/Fonts/JetBrainsMono.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
+          ls -la ios/Shared/Fonts
       - name: Generate Xcode project
         run: |
           brew install xcodegen
@@ -50,6 +50,11 @@ jobs:
         run: |
           cd ios
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          # ad-hoc подпись с entitlements (App Group для виджета) — переподписчик их подхватит
+          ENT=Entitlements/PhotoSSD.entitlements
+          for ext in "$APP"/PlugIns/*.appex; do codesign -f -s - --entitlements "$ENT" "$ext"; done
+          codesign -f -s - --entitlements "$ENT" "$APP"
+          codesign -d --entitlements - "$APP" 2>/dev/null | head -20 || true
           mkdir -p Payload && cp -R "$APP" Payload/
           zip -qr ../PhotoSSD-unsigned.ipa Payload
           ls -la ../PhotoSSD-unsigned.ipa

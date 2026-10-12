@@ -8,10 +8,12 @@ struct RootView: View {
                 .tabItem { Label("Главная", systemImage: "arrow.up.circle.fill") }.tag(0)
             LibraryView()
                 .tabItem { Label("Медиатека", systemImage: "square.grid.3x3.fill") }.tag(1)
-            LogView()
-                .tabItem { Label("Журнал", systemImage: "list.bullet.rectangle") }.tag(2)
+            SSDView()
+                .tabItem { Label("SSD", systemImage: "externaldrive.fill") }.tag(2)
+            StatsView()
+                .tabItem { Label("Статистика", systemImage: "chart.bar.fill") }.tag(3)
             SettingsView()
-                .tabItem { Label("Настройки", systemImage: "slider.horizontal.3") }.tag(3)
+                .tabItem { Label("Настройки", systemImage: "slider.horizontal.3") }.tag(4)
         }
     }
 }
@@ -44,6 +46,7 @@ struct HomeView: View {
                 .padding(.bottom, 32)
             }
             .background(Theme.bg.ignoresSafeArea())
+            .overlay(alignment: .topLeading) { FlightLayer(trigger: engine.landed, name: engine.lastLandedName) }
             .refreshable { await engine.refreshServer() }
             .toolbar(.hidden, for: .navigationBar)
         }
@@ -170,6 +173,70 @@ struct HomeView: View {
         Panel {
             MonoLabel(text: "Последняя ошибка", color: Theme.danger)
             Text(err).font(F.sans(14)).foregroundColor(Theme.ink).padding(.top, 8)
+        }
+    }
+}
+
+// MARK: - Анимация «залёта»: оранжевая плашка с именем файла взлетает к логотипу.
+
+struct Flight: Identifiable {
+    let id = UUID()
+    let name: String
+    let start: CGPoint
+}
+
+struct FlightLayer: View {
+    let trigger: Int
+    let name: String
+    @State private var flights: [Flight] = []
+
+    var body: some View {
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                ForEach(flights) { f in
+                    FlyingChip(flight: f, target: CGPoint(x: 31, y: 26)) {
+                        flights.removeAll { $0.id == f.id }
+                    }
+                }
+            }
+            .frame(width: g.size.width, height: g.size.height, alignment: .topLeading)
+            .onChange(of: trigger) { _ in
+                guard flights.count < 5 else { return }
+                let x = CGFloat.random(in: g.size.width * 0.25...g.size.width * 0.75)
+                flights.append(Flight(name: name, start: CGPoint(x: x, y: min(g.size.height * 0.55, 420))))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+struct FlyingChip: View {
+    let flight: Flight
+    let target: CGPoint
+    var done: () -> Void
+    @State private var progress: CGFloat = 0
+
+    var body: some View {
+        let x = flight.start.x + (target.x - flight.start.x) * progress
+        // дуга: поднимаемся выше прямой линии
+        let lift = sin(progress * .pi) * 60
+        let y = flight.start.y + (target.y - flight.start.y) * progress - lift
+        HStack(spacing: 6) {
+            Image(systemName: "photo.fill").font(.system(size: 10, weight: .bold))
+            Text(flight.name).font(F.mono(10, 600)).lineLimit(1)
+        }
+        .foregroundColor(Theme.bg)
+        .padding(.horizontal, 10).padding(.vertical, 6)
+        .background(Theme.accGradient)
+        .clipShape(Capsule())
+        .shadow(color: Theme.acc.opacity(0.6), radius: 10)
+        .scaleEffect(1 - progress * 0.75)
+        .opacity(progress > 0.85 ? Double((1 - progress) / 0.15) : 1)
+        .fixedSize()
+        .position(x: x, y: y)
+        .onAppear {
+            withAnimation(.easeIn(duration: 0.9)) { progress = 1 }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.95) { done() }
         }
     }
 }

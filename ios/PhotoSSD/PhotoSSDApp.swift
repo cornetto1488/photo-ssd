@@ -50,6 +50,7 @@ struct PhotoSSDApp: App {
         .onChange(of: phase) { p in
             switch p {
             case .active:
+                engine.resetNightReport()
                 Task {
                     await engine.refreshServer()
                     if settings.onboarded && settings.autoStart { engine.start(reason: "открытие") }

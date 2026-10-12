@@ -61,6 +61,8 @@
 		<string>ru.apodmarchuk.photossd.refresh</string>
 		<string>ru.apodmarchuk.photossd.processing</string>
 	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Onest.ttf</string>

@@ -150,6 +150,12 @@ final class AppSettings: ObservableObject {
     @Published var addToAlbum: Bool { didSet { d.set(addToAlbum, forKey: "addToAlbum") } }
     @Published var albumNameAfter: String { didSet { d.set(albumNameAfter, forKey: "albumNameAfter") } }
 
+    // Умная ночь и отклик
+    @Published var smartNight: Bool { didSet { d.set(smartNight, forKey: "smartNight") } }
+    @Published var morningHour: Int { didSet { d.set(morningHour, forKey: "morningHour") } }
+    @Published var haptics: Bool { didSet { d.set(haptics, forKey: "haptics") } }
+    @Published var liveActivity: Bool { didSet { d.set(liveActivity, forKey: "liveActivity") } }
+
     @Published var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
 
     private init() {
@@ -199,6 +205,11 @@ final class AppSettings: ObservableObject {
 
         addToAlbum = b("addToAlbum", false)
         albumNameAfter = s("albumNameAfter", "На SSD")
+
+        smartNight = b("smartNight", false)
+        morningHour = d.object(forKey: "morningHour") as? Int ?? 8
+        haptics = b("haptics", true)
+        liveActivity = b("liveActivity", true)
 
         onboarded = b("onboarded", false)
     }

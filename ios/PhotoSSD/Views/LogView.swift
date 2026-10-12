@@ -9,7 +9,7 @@ struct LogView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        Group {
             List {
                 if items.isEmpty {
                     Text("Пока пусто").font(F.sans(14)).foregroundColor(Theme.muted)

@@ -1,4 +1,4 @@
-import SwiftUI
+﻿import SwiftUI
 import Photos
 
 // Общий стиль форм
@@ -53,17 +53,24 @@ struct SettingsView: View {
                     NavigationLink { TransferSettings() } label: {
                         SettingsRow(icon: "arrow.up.arrow.down.circle", title: "Передача и фон", value: settings.wifiOnly ? "только Wi-Fi" : "любая сеть")
                     }.row()
+                    NavigationLink { NightSettings() } label: {
+                        SettingsRow(icon: "moon.stars.fill", title: "Умная ночь и отклик", value: settings.smartNight ? "вкл" : "выкл",
+                                    valueColor: settings.smartNight ? Theme.acc : Theme.muted)
+                    }.row()
                     NavigationLink { AfterSettings() } label: {
                         SettingsRow(icon: "checkmark.seal", title: "После выгрузки", value: settings.addToAlbum ? "в альбом" : "")
                     }.row()
                 } header: { SectionHeader(text: "Синхронизация", number: "03") }
 
                 Section {
+                    NavigationLink { LogView() } label: {
+                        SettingsRow(icon: "list.bullet.rectangle", title: "Журнал событий", value: "")
+                    }.row()
                     NavigationLink { MaintenanceSettings() } label: {
                         SettingsRow(icon: "wrench.and.screwdriver", title: "Обслуживание", value: "")
                     }.row()
                     NavigationLink { AboutView() } label: {
-                        SettingsRow(icon: "info.circle", title: "О приложении и авторе", value: "1.0")
+                        SettingsRow(icon: "info.circle", title: "О приложении и авторе", value: "2.0")
                     }.row()
                 } header: { SectionHeader(text: "Прочее", number: "04") }
             }
@@ -435,6 +442,61 @@ struct TransferSettings: View {
     }
 }
 
+// MARK: - Умная ночь
+
+struct NightSettings: View {
+    @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var engine: SyncEngine
+    @State private var denied = false
+
+    var body: some View {
+        ThemedForm {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Image(systemName: "moon.stars.fill").font(.system(size: 28)).foregroundStyle(Theme.accGradient)
+                    Text("Ставите iPhone на зарядку — ночью ZALET сам выгрузит всё новое, а утром пришлёт итог: «Залетело 47 фото, 1,2 ГБ».")
+                        .font(F.sans(14)).foregroundColor(Theme.ink)
+                }.padding(.vertical, 6).row()
+                Toggle("Умная ночь", isOn: Binding(get: { settings.smartNight }, set: { on in
+                    settings.smartNight = on
+                    if on {
+                        Task {
+                            denied = !(await NightReport.requestPermission())
+                            engine.scheduleBackground()
+                        }
+                    } else {
+                        NightReport.cancel()
+                        engine.scheduleBackground()
+                    }
+                })).row()
+                if settings.smartNight {
+                    Stepper(value: $settings.morningHour, in: 5...12) {
+                        HStack {
+                            Text("Утренний отчёт")
+                            Spacer()
+                            Text(String(format: "%02d:00", settings.morningHour)).font(F.mono(13)).foregroundColor(Theme.acc)
+                        }
+                    }.row()
+                }
+                if denied {
+                    Text("Уведомления выключены — включите их в Настройках iPhone → ZALET.").font(F.sans(12)).foregroundColor(Theme.danger).row()
+                }
+            } header: { SectionHeader(text: "Умная ночь") } footer: {
+                Hint(text: "Ночная выгрузка запускается после полуночи, когда iPhone на зарядке и в сети. Точное время выбирает iOS.")
+            }
+
+            Section {
+                Toggle("Тактильный отклик", isOn: $settings.haptics).row()
+                Toggle("Live Activity на экране блокировки", isOn: $settings.liveActivity).row()
+            } header: { SectionHeader(text: "Отклик") } footer: {
+                Hint(text: "Лёгкая отдача на каждый «залетевший» файл и прогресс выгрузки на экране блокировки и в Dynamic Island.")
+            }
+        }
+        .navigationTitle("Умная ночь")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 // MARK: - После выгрузки
 
 struct AfterSettings: View {
@@ -589,7 +651,7 @@ struct AboutView: View {
                     }
                     .padding(.top, 14)
                 }
-                Text("v1.0.0").font(F.mono(11)).foregroundColor(Theme.dim)
+                Text("v2.0.0").font(F.mono(11)).foregroundColor(Theme.dim)
             }
             .padding(20)
         }

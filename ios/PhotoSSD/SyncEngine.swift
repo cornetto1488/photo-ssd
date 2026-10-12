@@ -72,6 +72,20 @@ final class SyncEngine: NSObject, ObservableObject {
     @Published private(set) var queuedKeys: Set<String> = []
     @Published private(set) var inflightKeys: Set<String> = []
     @Published private(set) var lastError: String?
+    @Published private(set) var landed = 0             // счётчик для анимации «залёта»
+    @Published private(set) var lastLandedName = ""
+
+    // «Умная ночь»: итоги ночных выгрузок для утреннего уведомления
+    private var isNightRun = false
+    private var nightCount: Int {
+        get { UserDefaults.standard.integer(forKey: "nightCount") }
+        set { UserDefaults.standard.set(newValue, forKey: "nightCount") }
+    }
+    private var nightBytes: Int64 {
+        get { Int64(UserDefaults.standard.double(forKey: "nightBytes")) }
+        set { UserDefaults.standard.set(Double(newValue), forKey: "nightBytes") }
+    }
+    private var lastPublish = Date.distantPast
 
     private var queue: [PendingRef] = []
     private var running = false
@@ -215,6 +229,10 @@ final class SyncEngine: NSObject, ObservableObject {
             return
         }
         state = .syncing
+        if UIApplication.shared.applicationState == .active {
+            LiveActivityManager.start(done: doneInScope, total: totalInScope)
+        }
+        publishProgress(force: true)
         pump()
     }
 
@@ -225,6 +243,41 @@ final class SyncEngine: NSObject, ObservableObject {
         flushAlbum()
         if sessionUploaded > 0 {
             log.add("Готово: выгружено \(sessionUploaded), \(formatBytes(sessionBytes))", .ok)
+            Haptics.finished()
+        }
+        publishProgress(force: true)
+        LiveActivityManager.end(done: doneInScope, total: totalInScope, uploaded: sessionUploaded, bytes: sessionBytes)
+    }
+
+    /// Обновить виджет и Live Activity (не чаще раза в 2 секунды).
+    func publishProgress(force: Bool = false) {
+        guard force || Date().timeIntervalSince(lastPublish) > 2 else { return }
+        lastPublish = Date()
+        let total = max(totalInScope, store.done.count)
+        let done = totalInScope > 0 ? doneInScope : store.done.count
+        WidgetBridge.write(WidgetSnapshot(done: done, total: total, bytes: store.totalBytes,
+                                          online: serverOnline, syncing: state == .syncing,
+                                          lastSync: store.lastSync, free: serverStatus?.free ?? 0, updated: Date()))
+        if state == .syncing {
+            LiveActivityManager.update(done: doneInScope, total: totalInScope, speed: speed,
+                                       current: currentNames.first ?? "", uploaded: sessionUploaded)
+        }
+    }
+
+    func resetNightReport() {
+        nightCount = 0
+        nightBytes = 0
+    }
+
+    /// Отправить на роутер превью снимка (для просмотра SSD в приложении).
+    private func sendThumb(forKey key: String) {
+        guard let role = key.split(separator: "#").last.flatMap({ ResourceRole(rawValue: String($0)) }),
+              role == .photo || role == .video else { return }
+        let assetID = SyncStore.assetID(fromKey: key)
+        Task {
+            guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [assetID], options: nil).firstObject,
+                  let data = await ThumbLoader.libraryThumb(asset) else { return }
+            await ServerAPI.uploadThumb(data, id: key)
         }
     }
 
@@ -354,7 +407,6 @@ final class SyncEngine: NSObject, ObservableObject {
     }
 
     private func albumName(for asset: PHAsset) -> String? {
-        guard settings.effectiveTemplate.contains("{альбом}") else { return nil }
         let opts = PHFetchOptions()
         let cols = PHAssetCollection.fetchAssetCollectionsContaining(asset, with: .album, options: opts)
         return cols.firstObject?.localizedTitle
@@ -414,7 +466,9 @@ final class SyncEngine: NSObject, ObservableObject {
 
         // 3. Фоновая передача.
         do {
-            let req = try ServerAPI.uploadRequest(path: relPath, id: ref.key, size: size, mtime: info.date)
+            let kindParam = (ref.role == .liveVideo || ref.role == .liveVideoEdited) ? "livevideo" : info.kind.rawValue
+            let req = try ServerAPI.uploadRequest(path: relPath, id: ref.key, size: size, mtime: info.date,
+                                                  kind: kindParam, album: info.album)
             let task = activeSession.uploadTask(with: req, fromFile: tmp)
             let meta = TaskMeta(key: ref.key, path: relPath, tmp: tmp.lastPathComponent, size: size, name: (relPath as NSString).lastPathComponent)
             task.taskDescription = String(data: (try? JSONEncoder().encode(meta)) ?? Data(), encoding: .utf8)
@@ -486,6 +540,17 @@ final class SyncEngine: NSObject, ObservableObject {
             }
             if settings.addToAlbum { pendingAlbumIDs.append(SyncStore.assetID(fromKey: meta.key)) }
             if pendingAlbumIDs.count >= 50 { flushAlbum() }
+            if resp?.status != "duplicate" { sendThumb(forKey: meta.key) }
+            landed += 1
+            lastLandedName = meta.name
+            Haptics.landed()
+            if UIApplication.shared.applicationState != .active {
+                // выгрузки в фоне копим для утреннего отчёта
+                nightCount += 1
+                nightBytes += meta.size
+                if settings.smartNight { NightReport.schedule(count: nightCount, bytes: nightBytes, hour: settings.morningHour) }
+            }
+            publishProgress()
         } else {
             let resp = try? JSONDecoder().decode(UploadResponse.self, from: data)
             let msg = status == 401 ? "Неверный токен" : "Сервер ответил \(status) \(resp?.error ?? "")"
@@ -545,34 +610,61 @@ final class SyncEngine: NSObject, ObservableObject {
     // MARK: Фон
 
     func scheduleBackground() {
-        guard settings.backgroundEnabled else {
+        guard settings.backgroundEnabled || settings.smartNight else {
             BGTaskScheduler.shared.cancelAllTaskRequests()
             return
         }
-        let refresh = BGAppRefreshTaskRequest(identifier: Self.refreshTaskID)
-        refresh.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
-        try? BGTaskScheduler.shared.submit(refresh)
+        if settings.backgroundEnabled {
+            let refresh = BGAppRefreshTaskRequest(identifier: Self.refreshTaskID)
+            refresh.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60)
+            try? BGTaskScheduler.shared.submit(refresh)
+        }
 
+        // Долгая задача: днём — по настройке, ночью («умная ночь») — на зарядке после полуночи.
         let proc = BGProcessingTaskRequest(identifier: Self.processingTaskID)
         proc.requiresNetworkConnectivity = true
-        proc.requiresExternalPower = settings.backgroundOnlyCharging
-        proc.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
+        if settings.smartNight {
+            proc.requiresExternalPower = true
+            proc.earliestBeginDate = Self.nextNight()
+        } else {
+            proc.requiresExternalPower = settings.backgroundOnlyCharging
+            proc.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
+        }
         try? BGTaskScheduler.shared.submit(proc)
     }
 
+    static func nextNight() -> Date {
+        let cal = Calendar.current
+        let now = Date()
+        var c = cal.dateComponents([.year, .month, .day], from: now)
+        c.hour = 0; c.minute = 30
+        let tonight = cal.date(from: c) ?? now
+        if now < tonight { return tonight }
+        let hour = cal.component(.hour, from: now)
+        if hour < 6 { return now } // уже ночь — можно сразу
+        return cal.date(byAdding: .day, value: 1, to: tonight) ?? now
+    }
+
     func handleBackgroundTask(_ task: BGTask) {
+        let isProcessing = task.identifier == Self.processingTaskID
         scheduleBackground()
         task.expirationHandler = { [weak self] in
-            Task { @MainActor in self?.running = false }
+            Task { @MainActor in self?.running = false; self?.store.saveNow() }
         }
-        guard settings.backgroundEnabled else { task.setTaskCompleted(success: true); return }
-        start(reason: "фон")
-        // Передачи продолжатся в фоновой сессии сами; задачу завершаем, когда очередь передана системе.
+        guard settings.backgroundEnabled || settings.smartNight else { task.setTaskCompleted(success: true); return }
+        isNightRun = isProcessing && settings.smartNight
+        start(reason: isNightRun ? "умная ночь" : "фон")
         Task {
-            for _ in 0..<50 {
+            // Короткая задача: только передать очередь системе. Долгая (ночь): ждём, пока всё уйдёт.
+            let maxSeconds = isProcessing ? 25 * 60 : 25
+            for _ in 0..<maxSeconds {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
-                if self.queue.isEmpty && self.exporting == 0 { break }
+                let handedOver = self.queue.isEmpty && self.exporting == 0
+                if handedOver && (!isProcessing || self.inflightKeys.isEmpty) { break }
+                if !self.running && self.exporting == 0 { break }
             }
+            self.store.saveNow()
+            self.isNightRun = false
             task.setTaskCompleted(success: true)
         }
     }
