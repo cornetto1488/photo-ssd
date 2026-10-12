@@ -11,6 +11,7 @@
 <link rel="apple-touch-icon" href="icon.svg">
 
 <link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="cozy.css">
 </head>
 <body>
 <div class="bg-glow"></div>
@@ -54,6 +55,8 @@
       <a data-page="photos">Фото</a>
       <a data-page="network">Сеть</a>
       <a data-page="logs">Журналы</a>
+      <a data-page="vault">Пароли</a>
+      <a data-page="access">Доступ</a>
       <a data-page="services">Сервисы</a>
     </nav>
     <div class="top-right">
@@ -69,7 +72,7 @@
       <div class="hero-grid">
         <div class="hero">
           <div class="mono-label"><span class="live-dot"></span> <span class="acc">// 01</span> <span id="greet">ДОБРЫЙ ДЕНЬ</span> · <span id="dateLine"></span></div>
-          <h1 class="display"><span class="line">ВСЁ</span><span class="line grad">ПОД</span><span class="line grad">КОНТРОЛЕМ</span></h1>
+          <h1 class="display"><span class="line">ДОБРО</span><span class="line">ПОЖАЛОВАТЬ</span><span class="line grad">ДОМОЙ</span></h1>
           <p class="muted" id="heroSub">Проверяю дом…</p>
           <div class="quick">
             <button class="btn btn-acc" data-act="pc-on">⏻ Включить ПК</button>
@@ -84,12 +87,45 @@
         </div>
       </div>
 
+      <div class="hearth">
+        <div class="fire-card" id="fireCard">
+          <canvas id="fireCanvas"></canvas>
+          <div class="fire-cap">
+            <div class="mono-label"><span class="live-dot warm"></span> ОЧАГ · <span id="fireMood">ТЕПЛО</span></div>
+            <div class="fire-title display" id="fireTitle">У КАМИНА</div>
+            <p id="fireText">Дома тепло. Плед, чай и тихий треск поленьев.</p>
+            <div class="fire-btns">
+              <button class="btn btn-sm" id="fireLog">＋ Подкинуть полено</button>
+              <button class="btn btn-sm" id="fireSound">♪ Треск: выкл</button>
+            </div>
+          </div>
+        </div>
+        <div class="window-card" id="windowCard">
+          <canvas id="windowCanvas"></canvas>
+          <div class="win-cap">
+            <div class="mono-label">ЗА ОКНОМ</div>
+            <div class="win-temp display" id="wTemp">—°</div>
+            <div class="win-desc" id="wDesc">узнаю погоду…</div>
+            <div class="win-more mono-label" id="wMore"></div>
+          </div>
+          <div class="win-days" id="wDays"></div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// 02</span> НАСТРОЕНИЕ ДОМА</div>
+        <span class="mono-label muted" id="sceneHint">сцены для света</span>
+      </div>
+      <div class="scenes" id="scenes"></div>
+
+      <div class="cozy-strip" id="cozyStrip"></div>
+
       <div class="marquee"><div class="marquee-track" id="marquee"></div></div>
 
       <div class="grid tiles" id="tiles"></div>
 
       <div class="section-head">
-        <div class="mono-label"><span class="acc">// 02</span> МОИ ПРОЕКТЫ</div>
+        <div class="mono-label"><span class="acc">// 03</span> МОИ ПРОЕКТЫ</div>
       </div>
       <div class="projects" id="projects">
         <a class="proj proj-cv" href="https://apodmarchuk.ru" target="_blank" rel="noopener">
@@ -110,7 +146,7 @@
       </div>
 
       <div class="section-head">
-        <div class="mono-label"><span class="acc">// 03</span> БЫСТРЫЙ ДОСТУП</div>
+        <div class="mono-label"><span class="acc">// 04</span> БЫСТРЫЙ ДОСТУП</div>
         <a class="btn btn-sm" data-page="services">Все сервисы →</a>
       </div>
       <div class="launch" id="launch"></div>
@@ -199,11 +235,51 @@
       <div class="card log-card"><div class="log" id="log"></div></div>
     </section>
 
+    <!-- ПАРОЛИ -->
+    <section class="page" id="page-vault">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 07</span> ЗАШИФРОВАНО МАСТЕР-ПАРОЛЕМ</div>
+          <h2 class="display">ПАРОЛИ</h2>
+        </div>
+        <div class="head-actions" id="vaultHead"></div>
+      </div>
+      <div id="vaultBody"></div>
+    </section>
+
+    <!-- ДОСТУП -->
+    <section class="page" id="page-access">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 08</span> КЛЮЧИ И ВХОДЫ</div>
+          <h2 class="display">ДОСТУП</h2>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="card" id="tokenCard"></div>
+        <div class="card" id="routerCard"></div>
+      </div>
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// SSH</span> КЛЮЧИ ДЛЯ ВХОДА НА РОУТЕР</div>
+        <div class="head-actions"><button class="btn btn-sm" id="sshAddBtn">＋ Добавить ключ</button><button class="btn btn-sm btn-acc" id="sshGenBtn">✦ Создать новый</button></div>
+      </div>
+      <div class="keys" id="sshKeys"></div>
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// ХОСТЫ</span> МОИ СЕРВЕРЫ И ПУБЛИЧНЫЕ КЛЮЧИ</div>
+        <button class="btn btn-sm" id="hostAddBtn">＋ Добавить</button>
+      </div>
+      <div class="keys" id="hosts"></div>
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// WI-FI</span> ДЛЯ ГОСТЕЙ</div>
+      </div>
+      <div class="wifi-grid" id="wifiList"></div>
+    </section>
+
     <!-- СЕРВИСЫ -->
     <section class="page" id="page-services">
       <div class="page-head">
         <div>
-          <div class="mono-label"><span class="acc">// 07</span> ВСЁ В ОДНОМ МЕСТЕ</div>
+          <div class="mono-label"><span class="acc">// 09</span> ВСЁ В ОДНОМ МЕСТЕ</div>
           <h2 class="display">СЕРВИСЫ</h2>
         </div>
       </div>
@@ -220,8 +296,8 @@
   </main>
 
   <footer class="foot">
-    <span>ZALET HOME · v3.0</span>
-    <a href="https://apodmarchuk.ru" target="_blank" rel="noopener">apodmarchuk.ru ↗</a>
+    <span>ZALET HOME · v3.4</span>
+    <span class="foot-warm">дома тепло ♥</span>
   </footer>
 
   <nav class="bottom-nav" id="bottomNav">
@@ -229,7 +305,7 @@
     <a data-page="devices"><i>◐</i>Устройства</a>
     <a data-page="pc"><i>⏻</i>ПК</a>
     <a data-page="photos"><i>▣</i>Фото</a>
-    <a data-page="logs"><i>≡</i>Журналы</a>
+    <a data-page="vault"><i>⚿</i>Пароли</a>
     <a data-page="more"><i>⋯</i>Ещё</a>
   </nav>
 </div>
@@ -262,6 +338,16 @@
   </div>
 </div>
 
+<!-- Форма (пароль, ключ, хост) -->
+<div class="modal hidden" id="formModal">
+  <div class="modal-card form-card">
+    <button class="icon-btn modal-close" id="formClose">✕</button>
+    <div class="mono-label" id="formLabel"></div>
+    <h3 class="display form-title" id="formTitle"></h3>
+    <div class="form-body" id="formBody"></div>
+  </div>
+</div>
+
 <!-- Встроенное окно сервиса -->
 <div class="viewer hidden" id="viewer">
   <div class="viewer-bar">
@@ -277,5 +363,8 @@
 
 <div id="toast" class="toast"></div>
 <script src="app.js"></script>
+<script src="cozy.js"></script>
+<script src="vault.js"></script>
+<script src="access.js"></script>
 </body>
 </html>

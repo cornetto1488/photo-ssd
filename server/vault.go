@@ -7,14 +7,19 @@ import (
 	"crypto/cipher"
 	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/base32"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -32,6 +37,9 @@ type pwEntry struct {
 	URL      string `json:"url"`
 	Note     string `json:"note"`
 	Folder   string `json:"folder"`
+	Fav      bool   `json:"fav"`
+	TOTP     string `json:"totp"`
+	Created  int64  `json:"created"`
 	Updated  int64  `json:"updated"`
 }
 
@@ -151,9 +159,10 @@ func (v *pwVault) handle(w http.ResponseWriter, r *http.Request) {
 		Master string    `json:"master"`
 		Next   string    `json:"next"`
 		Entry  pwEntry   `json:"entry"`
+		Items  []pwEntry `json:"items"`
 	}
 	if r.Method == http.MethodPost {
-		json.NewDecoder(io.LimitReader(r.Body, 256<<10)).Decode(&req)
+		json.NewDecoder(io.LimitReader(r.Body, 8<<20)).Decode(&req)
 	} else {
 		req.Action = "status"
 	}
@@ -207,7 +216,7 @@ func (v *pwVault) handle(w http.ResponseWriter, r *http.Request) {
 		delete(v.sessions, r.Header.Get("X-Vault"))
 		v.mu.Unlock()
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-	case "list", "save", "delete", "change":
+	case "list", "save", "delete", "change", "totp", "import":
 		s := v.session(r)
 		if s == nil {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "хранилище заблокировано", "locked": true})
@@ -221,15 +230,38 @@ func (v *pwVault) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch req.Action {
+		case "totp":
+			for _, it := range items {
+				if it.ID == req.Entry.ID && it.TOTP != "" {
+					code, left, err := totpNow(it.TOTP)
+					if err != nil {
+						fail(w, http.StatusBadRequest, err.Error())
+						return
+					}
+					writeJSON(w, http.StatusOK, map[string]any{"code": code, "left": left})
+					return
+				}
+			}
+			fail(w, http.StatusNotFound, "нет ключа 2FA")
+			return
+		case "import":
+			for _, e := range req.Items {
+				e.ID = randHex(6)
+				e.Created = time.Now().Unix()
+				e.Updated = e.Created
+				items = append(items, e)
+			}
 		case "save":
 			e := req.Entry
 			e.Updated = time.Now().Unix()
 			if e.ID == "" {
 				e.ID = randHex(6)
+				e.Created = e.Updated
 				items = append(items, e)
 			} else {
 				for i := range items {
 					if items[i].ID == e.ID {
+						e.Created = items[i].Created
 						items[i] = e
 					}
 				}
@@ -284,4 +316,23 @@ func (v *pwVault) issue(w http.ResponseWriter, key, salt []byte, items []pwEntry
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "vault": tok, "items": items, "lockAfter": int(pwLockAfter.Seconds())})
 }
 
-var _ = binary.BigEndian
+// totpNow — код 2FA (RFC 6238, SHA1, 6 цифр, 30 с) из base32-ключа или otpauth:// ссылки.
+func totpNow(secret string) (string, int, error) {
+	if u, err := url.Parse(secret); err == nil && u.Scheme == "otpauth" {
+		secret = u.Query().Get("secret")
+	}
+	secret = strings.ToUpper(strings.NewReplacer(" ", "", "-", "", "=", "").Replace(secret))
+	key, err := base32.StdEncoding.WithPadding(base32.NoPadding).DecodeString(secret)
+	if err != nil || len(key) == 0 {
+		return "", 0, errors.New("неверный ключ 2FA")
+	}
+	now := time.Now().Unix()
+	var msg [8]byte
+	binary.BigEndian.PutUint64(msg[:], uint64(now/30))
+	m := hmac.New(sha1.New, key)
+	m.Write(msg[:])
+	h := m.Sum(nil)
+	off := h[len(h)-1] & 0x0f
+	n := binary.BigEndian.Uint32(h[off:off+4]) & 0x7fffffff
+	return fmt.Sprintf("%06d", n%1000000), int(30 - now%30), nil
+}

@@ -114,7 +114,7 @@ function lockCountdown(sec) {
 }
 async function showLock() {
   Object.entries(timers).forEach(([k, t]) => { if (k !== "toast") clearInterval(t); });
-  started = false;
+  started = false; try { cozyRun(false); } catch (e) {}
   $("#boot").classList.add("done");
   $("#app").classList.add("hidden"); $("#login").classList.remove("hidden");
   try {
@@ -168,12 +168,13 @@ function go(p) {
   $$(".page").forEach((s) => s.classList.toggle("active", s.id === "page-" + p));
   try { history.replaceState(null, "", "#" + p); } catch (e) {}
   window.scrollTo({ top: 0, behavior: "smooth" });
-  ({ home: loadStatus, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, network: loadClients, logs: loadLogs, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
+  cozyRun(p === "home");
+  ({ home: loadStatus, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, network: loadClients, logs: loadLogs, vault: loadVault, access: loadAccess, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
 }
 function openMore() {
-  const items = [["network", "Сеть"], ["services", "Сервисы"]];
+  const items = [["logs", "Журналы"], ["network", "Сеть"], ["access", "Доступ"], ["services", "Сервисы"]];
   const pick = items.map(([k, v]) => `<button class="btn" data-go="${k}">${v}</button>`).join("");
-  const t = $("#toast"); t.innerHTML = `<div style="display:flex;gap:8px">${pick}</div>`; t.classList.remove("bad"); t.classList.add("show");
+  const t = $("#toast"); t.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${pick}</div>`; t.classList.remove("bad"); t.classList.add("show");
   t.style.pointerEvents = "auto";
   $$("[data-go]", t).forEach((b) => b.onclick = () => { t.classList.remove("show"); t.style.pointerEvents = "none"; go(b.dataset.go); });
   clearTimeout(timers.toast); timers.toast = setTimeout(() => { t.classList.remove("show"); t.style.pointerEvents = "none"; }, 5000);
@@ -478,11 +479,14 @@ async function loadClients() {
 }
 function renderClients() {
   const q = $("#clientSearch").value.toLowerCase();
-  const list = clients.filter((c) => !q || (c.name + c.ip + c.mac).toLowerCase().includes(q));
+  const list = clients.filter((c) => !q || (c.name + c.ip + c.mac + (c.vendor || "")).toLowerCase().includes(q));
   const online = clients.filter((c) => c.online).length;
-  $("#clients").innerHTML = `<thead><tr><th></th><th>Устройство · ${online} в сети из ${clients.length}</th><th>IP</th><th>MAC</th></tr></thead><tbody>` +
+  const src = { custom: "ваше имя", dhcp: "имя устройства", tuya: "умный дом", vendor: "по производителю" };
+  $("#clients").innerHTML = `<thead><tr><th></th><th>Устройство · ${online} в сети из ${clients.length}</th><th>IP</th><th class="hide-m">MAC</th><th></th></tr></thead><tbody>` +
     list.map((c) => `<tr class="${c.online ? "" : "off"}"><td style="width:24px"><span class="dot ${c.online ? "ok" : ""}"></span></td>
-      <td>${esc(c.name || "без имени")}</td><td class="mono">${esc(c.ip)}</td><td class="mono">${esc(c.mac)}</td></tr>`).join("") + "</tbody>";
+      <td><b class="cl-name">${esc(c.name || "без имени")}</b><span class="cl-sub">${c.source ? src[c.source] || "" : "не представилось"}${c.vendor && c.source !== "vendor" ? " · " + esc(c.vendor) : ""}</span></td>
+      <td class="mono">${esc(c.ip)}</td><td class="mono hide-m">${esc(c.mac)}</td>
+      <td class="cl-acts"><button class="icon-btn" data-cl="rename" data-mac="${esc(c.mac)}" title="Переименовать">✎</button>${c.online ? "" : `<button class="icon-btn" data-cl="wol" data-mac="${esc(c.mac)}" title="Разбудить по сети">⏻</button>`}</td></tr>`).join("") + "</tbody>";
 }
 $("#clientSearch").oninput = renderClients;
 
@@ -538,7 +542,7 @@ const netViz = (() => {
     if (status) list.push({ id: "pc", label: "ПК", type: "pc", on: status.pc.online });
     devices.filter((d) => d.kind !== "pc" && d.kind !== "gateway").forEach((d) =>
       list.push({ id: d.id, label: d.name.replace("Лампочка", "Лампа"), type: "dev", on: d.online && !!(d.kind === "light" ? val(d, "switch_led") : val(d, "switch_1")), online: d.online }));
-    clients.filter((c) => c.online && c.ip !== status?.pc.ip).slice(0, 12).forEach((c) =>
+    clients.filter((c) => c.online && c.ip !== status?.pc.ip).slice(0, window.innerWidth < 600 ? 14 : 24).forEach((c) =>
       list.push({ id: c.mac, label: (c.name || c.ip.split(".").pop()).slice(0, 14), type: "cl", on: true }));
     const old = Object.fromEntries(nodes.map((n) => [n.id, n]));
     nodes = list.map((n, i) => ({ ...n, phase: old[n.id]?.phase ?? Math.random() * 6.28, i }));
@@ -766,11 +770,11 @@ function start() {
   if (started) return; started = true;
   tick(); renderSky(); timers.clock = setInterval(() => { tick(); renderSky(); }, 10000);
   setTimeout(() => $("#boot").classList.add("done"), 700);
-  loadDevices(); loadServiceInfo(); loadClientsQuiet(); checkSites(); netViz.start();
+  loadDevices(); loadServiceInfo(); loadClientsQuiet(); checkSites(); netViz.start(); cozyStart();
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
-  go(["home", "devices", "pc", "photos", "network", "logs", "services"].includes(p) ? p : "home");
+  go(["home", "devices", "pc", "photos", "network", "logs", "vault", "access", "services"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
   timers.devs = setInterval(() => { if (page === "devices") loadDevices(); }, 15000);
   timers.logs = setInterval(() => { if (page === "logs" && $("#logLive").checked) loadLogs(); }, 4000);
