@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08080a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>ZALET HOME</title>
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="bg-glow"></div>
+
+<!-- Вход -->
+<section id="login" class="login hidden">
+  <div class="login-card">
+    <div class="mono-label"><span class="acc">// 00</span> ВХОД</div>
+    <div class="wordmark big"><span class="za">ZA</span>LET<span class="home">HOME</span></div>
+    <p class="muted">Панель вашего дома. Вставьте токен доступа ZALET — браузер запомнит его.</p>
+    <input id="tokenInput" type="password" placeholder="токен доступа" autocomplete="off" spellcheck="false">
+    <button id="loginBtn" class="btn btn-acc">Войти</button>
+    <p id="loginErr" class="err"></p>
+  </div>
+</section>
+
+<!-- Приложение -->
+<div id="app" class="hidden">
+  <header class="top">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4 20-7Z"/></svg></div>
+      <div class="wordmark"><span class="za">ZA</span>LET<span class="home">HOME</span></div>
+    </div>
+    <nav id="nav">
+      <a data-page="home" class="active">Дом</a>
+      <a data-page="devices">Устройства</a>
+      <a data-page="pc">ПК</a>
+      <a data-page="photos">Фото</a>
+      <a data-page="network">Сеть</a>
+      <a data-page="logs">Журналы</a>
+      <a data-page="services">Сервисы</a>
+    </nav>
+    <div class="top-right">
+      <span class="pill" id="clock">--:--</span>
+      <button class="icon-btn" id="logoutBtn" title="Выйти">⎋</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ДОМ -->
+    <section class="page active" id="page-home">
+      <div class="hero">
+        <div class="mono-label"><span class="acc">// 01</span> <span id="greet">ДОБРЫЙ ДЕНЬ</span></div>
+        <h1 class="display">ВСЁ<br><span class="grad">ПОД КОНТРОЛЕМ</span></h1>
+        <p class="muted" id="heroSub">Проверяю дом…</p>
+        <div class="quick">
+          <button class="btn btn-acc" data-act="pc-on">⏻ Включить ПК</button>
+          <button class="btn" data-act="pc-off">Выключить ПК</button>
+          <button class="btn" data-act="alloff">Выключить весь свет</button>
+        </div>
+      </div>
+      <div class="grid tiles" id="tiles"></div>
+    </section>
+
+    <!-- УСТРОЙСТВА -->
+    <section class="page" id="page-devices">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 02</span> УМНЫЙ ДОМ</div>
+          <h2 class="display">УСТРОЙСТВА</h2>
+        </div>
+        <div class="head-actions">
+          <button class="btn" data-act="alloff">Всё выключить</button>
+          <button class="btn" id="devRefresh">Обновить</button>
+        </div>
+      </div>
+      <p class="muted small">Те же устройства, что в Smart Life и у Маруси. Изменения видны везде сразу.</p>
+      <div id="rooms"></div>
+    </section>
+
+    <!-- ПК -->
+    <section class="page" id="page-pc">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 03</span> КОМПЬЮТЕР</div>
+          <h2 class="display">ПК</h2>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="card pc-card" id="pcCard"></div>
+        <div class="card">
+          <div class="mono-label">КАК УПРАВЛЯТЬ</div>
+          <ul class="list">
+            <li><b>Голосом:</b> «Маруся, включи / выключи компьютер».</li>
+            <li><b>Отсюда:</b> кнопки слева — работают дома и через Tailscale.</li>
+            <li>Выключение корректное: Windows завершает работу сама, из сна — будится и выключается.</li>
+            <li>Включение — Wake-on-LAN по кабелю.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ФОТО -->
+    <section class="page" id="page-photos">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 04</span> ZALET</div>
+          <h2 class="display">ФОТО НА SSD</h2>
+        </div>
+      </div>
+      <div class="grid stats" id="photoStats"></div>
+      <div class="mono-label section-label">ПОСЛЕДНИЕ ЗАЛЁТЫ</div>
+      <div class="thumbs" id="thumbs"></div>
+    </section>
+
+    <!-- СЕТЬ -->
+    <section class="page" id="page-network">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 05</span> ДОМАШНЯЯ СЕТЬ</div>
+          <h2 class="display">СЕТЬ</h2>
+        </div>
+        <input class="search" id="clientSearch" placeholder="Поиск по имени, IP, MAC">
+      </div>
+      <div class="card table-card"><table class="table" id="clients"></table></div>
+    </section>
+
+    <!-- ЖУРНАЛЫ -->
+    <section class="page" id="page-logs">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 06</span> ЧТО ПРОИСХОДИТ</div>
+          <h2 class="display">ЖУРНАЛЫ</h2>
+        </div>
+        <div class="head-actions">
+          <input class="search" id="logSearch" placeholder="Поиск в журнале">
+          <label class="toggle-label"><input type="checkbox" id="logLive" checked> <span>вживую</span></label>
+        </div>
+      </div>
+      <div class="chips" id="logChips"></div>
+      <div class="card log-card"><div class="log" id="log"></div></div>
+    </section>
+
+    <!-- СЕРВИСЫ -->
+    <section class="page" id="page-services">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 07</span> ВСЁ В ОДНОМ МЕСТЕ</div>
+          <h2 class="display">СЕРВИСЫ</h2>
+        </div>
+      </div>
+      <div class="grid services" id="services"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>ZALET HOME · v3.0</span>
+    <a href="https://apodmarchuk.ru" target="_blank" rel="noopener">apodmarchuk.ru ↗</a>
+  </footer>
+
+  <nav class="bottom-nav" id="bottomNav">
+    <a data-page="home" class="active"><i>⌂</i>Дом</a>
+    <a data-page="devices"><i>◐</i>Устройства</a>
+    <a data-page="pc"><i>⏻</i>ПК</a>
+    <a data-page="photos"><i>▣</i>Фото</a>
+    <a data-page="logs"><i>≡</i>Журналы</a>
+    <a data-page="more"><i>⋯</i>Ещё</a>
+  </nav>
+</div>
+
+<div id="toast" class="toast"></div>
+<script src="app.js"></script>
+</body>
+</html>

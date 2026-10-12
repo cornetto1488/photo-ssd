@@ -49,7 +49,7 @@ import (
 )
 
 const (
-	version   = "2.0.0"
+	version   = "3.0.0"
 	trashDays = 30
 	metaDir   = ".photossd"
 )
@@ -72,6 +72,8 @@ type server struct {
 	root  string
 	token string
 
+	mux *http.ServeMux
+
 	mu    sync.Mutex
 	byID  map[string]*record
 	paths map[string]string // путь -> id (только для живых файлов)
@@ -82,6 +84,11 @@ func main() {
 	listen := flag.String("listen", ":8099", "адрес для прослушивания")
 	root := flag.String("root", "/mnt/ssd/Photos", "корневая папка для фото")
 	tokenFile := flag.String("token-file", "/etc/photossd.token", "файл с токеном доступа")
+	portalListen := flag.String("portal-listen", "", "адреса панели ZALET HOME через запятую, напр. 192.168.1.1:80")
+	portalProxy := flag.String("portal-proxy", "", "куда отдавать служебные пути роутера (LuCI), напр. http://192.168.1.2")
+	tuyaConf := flag.String("tuya-conf", "/etc/pc-remote.conf", "настройки облака Tuya")
+	pcIP := flag.String("pc-ip", "192.168.1.104", "IP компьютера")
+	pcMAC := flag.String("pc-mac", "C8:7F:54:A9:D9:C1", "MAC компьютера")
 	flag.Parse()
 
 	tok, err := os.ReadFile(*tokenFile)
@@ -118,6 +125,10 @@ func main() {
 	}
 	for p, h := range routes {
 		mux.HandleFunc(p, s.auth(h))
+	}
+	s.mux = mux
+	if *portalListen != "" {
+		newPortal(s, *tuyaConf, *portalProxy, *pcIP, *pcMAC).listen(*portalListen)
 	}
 	srv := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}
 	log.Printf("photossd %s: %s -> %s (%d записей)", version, *listen, s.root, len(s.byID))
