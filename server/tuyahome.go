@@ -143,7 +143,7 @@ func (tl *tuyaLocal) discover() {
 		wg.Add(1)
 		go func(ip string) {
 			defer wg.Done()
-			if dialOKTimeout(ip+":6668", 800*time.Millisecond) {
+			if dialOKTimeout(ip+":6668", 2*time.Second) {
 				om.Lock()
 				open = append(open, ip)
 				om.Unlock()
@@ -299,10 +299,13 @@ func runProbeCLI(confPath string) {
 	// отладка: какие IP открыты и что отвечают устройства
 	devs, err := tl.cloudList()
 	fmt.Println("облако:", len(devs), err)
+	for _, cd := range devs {
+		fmt.Printf("  %s sub=%v cat=%s keylen=%d node=%s\n", cd.Name, cd.Sub, cd.Category, len(cd.Key), cd.NodeID)
+	}
 	ips := candidateIPs()
 	fmt.Println("кандидаты:", ips)
 	for _, ip := range ips {
-		if !dialOKTimeout(ip+":6668", 800*time.Millisecond) {
+		if !dialOKTimeout(ip+":6668", 2*time.Second) {
 			continue
 		}
 		fmt.Println("порт 6668 открыт:", ip)

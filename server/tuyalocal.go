@@ -232,6 +232,10 @@ func (t *tuyaConn) read(deadline time.Time) (*frame, error) {
 		}
 	}
 	if t.d.Version == "3.4" {
+		// у ответов устройства перед шифротекстом идут 4 байта кода возврата
+		if len(data)%16 == 4 {
+			data = data[4:]
+		}
 		dec, err := ecbDec(t.sessKey, data)
 		if err != nil {
 			return nil, err
