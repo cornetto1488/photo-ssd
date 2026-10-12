@@ -14,6 +14,7 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	mrand "math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -456,7 +457,8 @@ func (p *homePortal) handleStatus(w http.ResponseWriter, r *http.Request) {
 	go func() { defer wg.Done(); internet = dialOK("77.88.8.8:53") || dialOK("1.1.1.1:53") }()
 	go func() { defer wg.Done(); pc = pingHost(p.pcIP) }()
 	wg.Wait()
-	svc := procRunning("v2raya", "xray", "tailscaled", "zerotier-one", "smbd", "pc-remote", "dnsmasq", "syncthing")
+	svc := procRunning("v2raya", "xray", "tailscaled", "zerotier-one", "smbd", "pc-remote", "dnsmasq",
+		"doh-proxy", "stubby", "youtubeUnblock")
 
 	p.s.mu.Lock()
 	files, trash := 0, 0
@@ -634,6 +636,77 @@ func (p *homePortal) handleClients(w http.ResponseWriter, r *http.Request) {
 		return list[i].IP < list[j].IP
 	})
 	writeJSON(w, http.StatusOK, map[string]any{"clients": list})
+}
+
+// ---------- мозаика из ваших фото ----------
+
+func (p *homePortal) handleRandom(w http.ResponseWriter, r *http.Request) {
+	n, _ := strconv.Atoi(r.URL.Query().Get("count"))
+	if n <= 0 || n > 60 {
+		n = 12
+	}
+	p.s.mu.Lock()
+	pool := make([]record, 0, 1024)
+	for _, rec := range p.s.byID {
+		if p.s.live(rec) && rec.Thumb && (rec.Kind == "photo" || rec.Kind == "live") {
+			pool = append(pool, *rec)
+		}
+	}
+	p.s.mu.Unlock()
+	mrand.Shuffle(len(pool), func(i, j int) { pool[i], pool[j] = pool[j], pool[i] })
+	if len(pool) > n {
+		pool = pool[:n]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": pool})
+}
+
+// ---------- управление службами ----------
+
+var allowedServices = map[string]string{
+	"v2raya":         "Обход блокировок (v2raya)",
+	"tailscale":      "Tailscale",
+	"zerotier":       "ZeroTier",
+	"samba4":         "Сетевая папка (Samba)",
+	"pc-remote":      "Голосовое управление ПК",
+	"dnsmasq":        "DNS и DHCP",
+	"doh-proxy":      "Шифрованный DNS (DoH)",
+	"stubby":         "Шифрованный DNS (DoT)",
+	"youtubeUnblock": "YouTube без замедления",
+}
+
+func (p *homePortal) handleService(w http.ResponseWriter, r *http.Request) {
+	if !needPost(w, r) {
+		return
+	}
+	name := r.URL.Query().Get("name")
+	action := r.URL.Query().Get("action")
+	if _, ok := allowedServices[name]; !ok {
+		fail(w, http.StatusBadRequest, "этой службой из панели управлять нельзя")
+		return
+	}
+	if action != "restart" && action != "stop" && action != "start" {
+		fail(w, http.StatusBadRequest, "действие: restart, stop или start")
+		return
+	}
+	out, err := exec.Command("/etc/init.d/"+name, action).CombinedOutput()
+	log.Printf("панель: %s %s", name, action)
+	if err != nil {
+		fail(w, http.StatusInternalServerError, strings.TrimSpace(string(out))+" "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (p *homePortal) handleInfo(w http.ResponseWriter, r *http.Request) {
+	ts := ""
+	if out, err := exec.Command("tailscale", "ip", "-4").Output(); err == nil {
+		ts = strings.TrimSpace(string(out))
+	}
+	enabled := map[string]bool{}
+	for n := range allowedServices {
+		enabled[n] = exec.Command("/etc/init.d/"+n, "enabled").Run() == nil
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tailscaleIP": ts, "services": allowedServices, "enabled": enabled})
 }
 
 // ---------- вход по PIN ----------
@@ -931,6 +1004,9 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/pc":      p.handlePC,
 		"/api/home/clients": p.handleClients,
 		"/api/home/logs":    p.handleLogs,
+		"/api/home/random":  p.handleRandom,
+		"/api/home/service": p.handleService,
+		"/api/home/info":    p.handleInfo,
 	}
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))

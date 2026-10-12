@@ -167,7 +167,7 @@ function go(p) {
   $$(".page").forEach((s) => s.classList.toggle("active", s.id === "page-" + p));
   try { history.replaceState(null, "", "#" + p); } catch (e) {}
   window.scrollTo({ top: 0, behavior: "smooth" });
-  ({ home: loadStatus, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, network: loadClients, logs: loadLogs, services: loadStatus })[p]?.();
+  ({ home: loadStatus, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, network: loadClients, logs: loadLogs, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
 }
 function openMore() {
   const items = [["network", "Сеть"], ["services", "Сервисы"]];
@@ -202,7 +202,7 @@ function tick() {
 // ---------- статус дома ----------
 async function loadStatus() {
   try { status = await api("/api/home/status"); } catch (e) { $("#heroSub").textContent = e.message; return; }
-  renderTiles(); renderPC(); renderServices();
+  renderTiles(); renderPC(); renderServices(); renderMarquee(); renderHouse(); renderLaunch();
 }
 function tile({ label, num, val, sub, ok, bar, accent }) {
   return `<div class="tile ${accent ? "accent" : ""}">
@@ -255,7 +255,7 @@ async function loadDevices(fresh) {
   if (!devices.length) $("#rooms").innerHTML = `<div class="devices">${'<div class="skeleton"></div>'.repeat(6)}</div>`;
   try { devices = (await api("/api/home/devices" + (fresh ? "?fresh=1" : ""))).devices || []; }
   catch (e) { $("#rooms").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
-  renderDevices();
+  renderDevices(); renderHouse(); renderMarquee();
 }
 function devCard(d) {
   let on = false, controls = "";
@@ -379,8 +379,174 @@ async function loadLogs() {
   } catch (e) { $("#log").innerHTML = `<p class="err" style="padding:0 18px">${esc(e.message)}</p>`; }
 }
 
+// ---------- живость: небо, бегущая строка, мозаика ----------
+const MONTHS = ["ЯНВАРЯ", "ФЕВРАЛЯ", "МАРТА", "АПРЕЛЯ", "МАЯ", "ИЮНЯ", "ИЮЛЯ", "АВГУСТА", "СЕНТЯБРЯ", "ОКТЯБРЯ", "НОЯБРЯ", "ДЕКАБРЯ"];
+const DAYS = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
+function renderSky() {
+  const d = new Date(), h = d.getHours() + d.getMinutes() / 60;
+  $("#dateLine").textContent = `${DAYS[d.getDay()]} · ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  const sky = $("#sky"); if (!sky) return;
+  const night = h < 6 || h >= 21;
+  sky.className = "sky " + (night ? "night" : h < 10 ? "morning" : h < 17 ? "day" : "");
+  // дуга: солнце с 6 до 21, луна с 21 до 6
+  let t = night ? ((h >= 21 ? h - 21 : h + 3) / 9) : (h - 6) / 15;
+  t = Math.max(0, Math.min(1, t));
+  const orb = $("#orb");
+  orb.style.left = (12 + t * 76) + "%";
+  orb.style.top = (58 - Math.sin(t * Math.PI) * 38) + "%";
+  if (!$("#stars").children.length) {
+    $("#stars").innerHTML = Array.from({ length: 40 }, () =>
+      `<i style="left:${Math.random() * 100}%;top:${Math.random() * 60}%;animation-delay:${(Math.random() * 3).toFixed(2)}s;opacity:${Math.random() * .4}"></i>`).join("");
+  }
+  $("#skyCap").textContent = night ? "ДОМ · НОЧЬ" : h < 10 ? "ДОМ · УТРО" : h < 17 ? "ДОМ · ДЕНЬ" : "ДОМ · ВЕЧЕР";
+}
+function renderHouse() {
+  const lit = devices.some((d) => d.kind === "light" && val(d, "switch_led")) || devices.some((d) => d.kind === "switch" && val(d, "switch_1"));
+  $$(".house .win")[0]?.classList.toggle("off", devices.length ? !lit : false);
+  $$(".house .win")[1]?.classList.toggle("off", status ? !status.pc.online : false);
+}
+function renderMarquee() {
+  const s = status; if (!s) return;
+  const sv = s.services;
+  const items = [
+    `ИНТЕРНЕТ <b>${s.internet ? "В СЕТИ" : "НЕТ"}</b>`,
+    `ПК <b>${s.pc.online ? "ВКЛЮЧЁН" : "ВЫКЛЮЧЕН"}</b>`,
+    `НА SSD <b>${s.photos.files.toLocaleString("ru-RU")} ФОТО</b>`,
+    `СВОБОДНО <b>${fmtBytes(s.ssd.free)}</b>`,
+    `РОУТЕР <b>${fmtUptime(s.router.uptime)}</b>`,
+    s.router.temp ? `ТЕМПЕРАТУРА <b>${s.router.temp.toFixed(0)}°C</b>` : "",
+    `VPN <b>${sv.xray ? "ГЕРМАНИЯ" : "ВЫКЛ"}</b>`,
+    `TAILSCALE <b>${sv.tailscaled ? "ОНЛАЙН" : "ВЫКЛ"}</b>`,
+    devices.length ? `УСТРОЙСТВ <b>${devices.filter((d) => d.online).length}/${devices.length}</b>` : "",
+    `ПОСЛЕДНИЙ ЗАЛЁТ <b>${ago(s.photos.last).toUpperCase()}</b>`,
+  ].filter(Boolean);
+  const html = items.map((x) => `<span>${x}</span>`).join("");
+  $("#marquee").innerHTML = html + html; // дважды — для бесшовного цикла
+}
+
+let mosaicPool = [], mosaicShown = [];
+async function loadMosaic() {
+  try { mosaicPool = (await api("/api/home/random?count=36")).items || []; } catch (e) { return; }
+  const n = Math.min(window.innerWidth < 860 ? 9 : 12, mosaicPool.length);
+  mosaicShown = mosaicPool.splice(0, n);
+  $("#mosaic").innerHTML = mosaicShown.map((it, i) => `<div class="ph" data-i="${i}">${imgFor(it)}<span class="when">${esc(new Date((it.date || it.time) * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" }))}</span></div>`).join("") ||
+    `<p class="muted">Здесь появятся ваши фото, когда ZALET выгрузит их на SSD.</p>`;
+  $$("#mosaic img").forEach((img) => img.onload = () => img.classList.add("show"));
+  $$("#mosaic .ph").forEach((ph) => ph.onclick = () => { const it = mosaicShown[ph.dataset.i]; if (it) window.open(`/api/v1/file?id=${encodeURIComponent(it.id)}`, "_blank"); });
+}
+const imgFor = (it) => `<img src="/api/v1/thumb?id=${encodeURIComponent(it.id)}" alt="" loading="lazy">`;
+function rotateMosaic() {
+  if (page !== "home" || !mosaicPool.length || !mosaicShown.length) return;
+  const i = Math.floor(Math.random() * mosaicShown.length);
+  const ph = $(`#mosaic .ph[data-i="${i}"]`); if (!ph) return;
+  const next = mosaicPool.shift(); mosaicPool.push(mosaicShown[i]); mosaicShown[i] = next;
+  const img = new Image(); img.alt = ""; img.src = `/api/v1/thumb?id=${encodeURIComponent(next.id)}`;
+  img.onload = () => {
+    const old = ph.querySelector("img"); ph.insertBefore(img, old);
+    requestAnimationFrame(() => { img.classList.add("show"); old.classList.remove("show"); });
+    setTimeout(() => old.remove(), 1300);
+    ph.querySelector(".when").textContent = new Date((next.date || next.time) * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
+  };
+}
+$("#shuffleBtn").onclick = loadMosaic;
+
+// ---------- встроенное окно сервиса ----------
+function openViewer(title, url) {
+  $("#viewerTitle").textContent = title;
+  $("#viewerOpen").href = url;
+  const f = $("#viewerFrame"); f.classList.remove("ready");
+  f.onload = () => f.classList.add("ready");
+  f.src = url;
+  $("#viewer").classList.remove("hidden");
+}
+$("#viewerClose").onclick = () => { $("#viewer").classList.add("hidden"); $("#viewerFrame").src = "about:blank"; };
+
+// ---------- плитки быстрого доступа ----------
+const IMG = (n) => `https://apodmarchuk.ru/assets/ph/${n}`;
+function tilesDef() {
+  const host = location.hostname;
+  const sv = status?.services || {};
+  return [
+    { t: "Устройства", s: "свет и выключатели", i: "◐", img: IMG("st-auto.jpg"), page: "devices", ok: !!status?.tuya },
+    { t: "Компьютер", s: status?.pc.online ? "включён" : "выключен", i: "⏻", img: IMG("st-srv.jpg"), page: "pc", ok: status?.pc.online },
+    { t: "Фото", s: `${(status?.photos.files || 0).toLocaleString("ru-RU")} на SSD`, i: "▣", img: mosaicShown[0] ? `/api/v1/thumb?id=${encodeURIComponent(mosaicShown[0].id)}` : IMG("st-net.jpg"), page: "photos", ok: true },
+    { t: "Роутер", s: "LuCI · все настройки", i: "⌁", img: IMG("about-rack.jpg"), view: ["Роутер · LuCI", "/cgi-bin/luci/"], ok: true },
+    { t: "VPN", s: "v2raya · обход блокировок", i: "⛨", img: IMG("tile-vpn.jpg"), view: ["Обход блокировок · v2raya", `http://${host}:2017`], ok: !!sv.xray },
+    { t: "Сеть", s: "кто подключён", i: "⌘", img: IMG("st-net.jpg"), page: "network", ok: true },
+    { t: "Tailscale", s: "удалённый доступ", i: "✶", img: IMG("tile-optic.jpg"), link: "https://login.tailscale.com/admin/machines", ok: !!sv.tailscaled },
+    { t: "Журналы", s: "что происходит", i: "≡", img: IMG("tile-cross.jpg"), page: "logs", ok: true },
+    { t: "ZeroTier", s: "запасной вход", i: "◇", img: IMG("tile-optic.jpg"), link: "https://my.zerotier.com/network/633e31d8a24936c0", ok: !!sv["zerotier-one"] },
+    { t: "Tuya", s: "облако умного дома", i: "☁", img: IMG("st-auto.jpg"), link: "https://platform.tuya.com/cloud/basic?id=p1791753104488dqxkt4&toptab=related&region=EU&deviceTab=all", ok: !!status?.tuya },
+    { t: "Терминал РТК", s: "192.168.0.1", i: "⇄", img: IMG("tile-cross.jpg"), link: "http://192.168.0.1", ok: !!status?.internet },
+    { t: "Исходники", s: "GitHub · сборки", i: "⌥", img: IMG("about-rack.jpg"), link: "https://github.com/cornetto1488/photo-ssd/actions", ok: null },
+  ];
+}
+function launchTile(x, idx) {
+  return `<div class="lt" data-lt="${idx}"><div class="bg" style="background-image:url('${x.img}')"></div>
+    <div class="ico">${x.i}</div>${x.ok === null || x.ok === undefined ? "" : `<span class="st"><span class="dot ${x.ok ? "ok" : "bad"}"></span></span>`}
+    <h4>${esc(x.t)}</h4><p>${esc(x.s)}</p><span class="tag">${x.view ? "ОТКРЫТЬ ЗДЕСЬ" : x.link ? "ВНЕШНЯЯ ССЫЛКА ↗" : "РАЗДЕЛ ПАНЕЛИ"}</span></div>`;
+}
+function renderLaunch() {
+  const defs = tilesDef();
+  $("#launch").innerHTML = defs.slice(0, 8).map(launchTile).join("");
+  $("#launchAll").innerHTML = defs.map(launchTile).join("");
+  $$("[data-lt]").forEach((el) => el.onclick = () => {
+    const x = defs[el.dataset.lt];
+    if (x.page) go(x.page); else if (x.view) openViewer(...x.view); else if (x.link) window.open(x.link, "_blank", "noopener");
+  });
+}
+
 // ---------- сервисы ----------
+let svcInfo = null;
+async function loadServiceInfo() { try { svcInfo = await api("/api/home/info"); } catch (e) {} renderServices(); }
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-svc]"); if (!b) return;
+  const [name, action] = b.dataset.svc.split(":");
+  if (action === "stop" && !confirm(`Остановить «${svcInfo?.services?.[name] || name}»?`)) return;
+  b.disabled = true;
+  try { await post(`/api/home/service?name=${name}&action=${action}`); toast(({ restart: "Перезапущено", stop: "Остановлено", start: "Запущено" })[action] + ": " + (svcInfo?.services?.[name] || name)); setTimeout(loadStatus, 2500); }
+  catch (er) { toast(er.message, true); }
+  finally { b.disabled = false; }
+});
+const RUN = { v2raya: "v2raya", tailscale: "tailscaled", zerotier: "zerotier-one", samba4: "smbd", "pc-remote": "pc-remote", dnsmasq: "dnsmasq", "doh-proxy": "doh-proxy", stubby: "stubby", youtubeUnblock: "youtubeUnblock" };
+function renderDeepLinks() {
+  const ts = svcInfo?.tailscaleIP || "";
+  const L = [
+    ["✶", "Tailscale · машины", "все устройства в сети", "https://login.tailscale.com/admin/machines"],
+    ["✶", "Tailscale · роутер", ts || "exit node и маршруты", ts ? `https://login.tailscale.com/admin/machines/${ts}` : "https://login.tailscale.com/admin/machines"],
+    ["✶", "Tailscale · DNS", "split DNS для home.lan", "https://login.tailscale.com/admin/dns"],
+    ["✶", "Tailscale · ключи", "срок действия ключей", "https://login.tailscale.com/admin/settings/keys"],
+    ["◇", "ZeroTier · сеть", "участники и адреса", "https://my.zerotier.com/network/633e31d8a24936c0"],
+    ["☁", "Tuya · устройства", "права Control", "https://platform.tuya.com/cloud/basic?id=p1791753104488dqxkt4&toptab=related&region=EU&deviceTab=all"],
+    ["⌁", "LuCI · Wi-Fi", "сети и пароли", "view:/cgi-bin/luci/admin/network/wireless"],
+    ["⌁", "LuCI · пакеты", "установка программ", "view:/cgi-bin/luci/admin/system/package-manager"],
+    ["⌁", "LuCI · обзор", "состояние роутера", "view:/cgi-bin/luci/admin/status/overview"],
+    ["⇄", "Терминал · порты", "переадресация РТК", "http://192.168.0.1/admin/fw-portfw.asp"],
+    ["⌥", "GitHub · сборки", "ZALET, панель", "https://github.com/cornetto1488/photo-ssd/actions"],
+    ["✦", "apodmarchuk.ru", "ваш сайт", "https://apodmarchuk.ru"],
+  ];
+  $("#deepLinks").innerHTML = L.map(([i, t, s, u]) => u.startsWith("view:")
+    ? `<a href="#" data-view="${u.slice(5)}" data-title="${esc(t)}"><i>${i}</i><div><b>${esc(t)}</b><span>${esc(s)}</span></div></a>`
+    : `<a href="${u}" target="_blank" rel="noopener"><i>${i}</i><div><b>${esc(t)}</b><span>${esc(s)}</span></div></a>`).join("");
+  $$("#deepLinks [data-view]").forEach((a) => a.onclick = (e) => { e.preventDefault(); openViewer(a.dataset.title, a.dataset.view); });
+}
 function renderServices() {
+  if (!$("#services")) return;
+  const sv = status?.services || {};
+  const names = svcInfo?.services || {};
+  $("#services").innerHTML = Object.keys(names).sort().map((n) => {
+    const running = sv[RUN[n]];
+    const known = RUN[n] in sv;
+    const on = known ? running : svcInfo?.enabled?.[n];
+    return `<div class="card svc"><div class="head"><h4>${esc(names[n])}</h4><span class="state"><span class="dot ${on ? "ok" : "bad"}"></span>${known ? (running ? "работает" : "остановлена") : (on ? "включена" : "выключена")}</span></div>
+      <p class="mono-label">/etc/init.d/${esc(n)}</p>
+      <div class="svc-actions"><button class="btn" data-svc="${n}:restart">↻ Перезапустить</button>
+      <button class="btn btn-danger" data-svc="${n}:stop">■ Стоп</button><button class="btn" data-svc="${n}:start">▶ Старт</button></div></div>`;
+  }).join("");
+  renderDeepLinks();
+}
+
+function renderServicesOld() {
   const sv = status?.services || {};
   const card = (name, ok, desc, addr, links) => `<div class="card svc">
     <div class="head"><h4>${name}</h4>${ok === null ? "" : `<span class="state"><span class="dot ${ok ? "ok" : "bad"}"></span>${ok ? "работает" : "выключен"}</span>`}</div>
@@ -402,7 +568,10 @@ function renderServices() {
 // ---------- запуск ----------
 function start() {
   if (started) return; started = true;
-  tick(); timers.clock = setInterval(tick, 10000);
+  tick(); renderSky(); timers.clock = setInterval(() => { tick(); renderSky(); }, 10000);
+  setTimeout(() => $("#boot").classList.add("done"), 700);
+  loadMosaic(); loadDevices(); loadServiceInfo();
+  timers.mosaic = setInterval(rotateMosaic, 4500);
   const p = (location.hash || "#home").slice(1);
   go(["home", "devices", "pc", "photos", "network", "logs", "services"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
