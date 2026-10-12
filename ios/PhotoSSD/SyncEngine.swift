@@ -148,7 +148,11 @@ final class SyncEngine: NSObject, ObservableObject {
         restoreInflight()
         pathMonitor.pathUpdateHandler = { path in
             let wifi = path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet)
-            Task { @MainActor in SyncEngine.shared.onWifiChange(wifi) }
+            let kind = path.status != .satisfied ? "нет сети" : (wifi ? "Wi-Fi" : (path.usesInterfaceType(.cellular) ? "LTE" : "другая"))
+            Task { @MainActor in
+                SyncEngine.shared.onWifiChange(wifi)
+                SyncEngine.shared.onNetworkChange(kind: kind)
+            }
         }
         pathMonitor.start(queue: DispatchQueue(label: "zalet.path"))
     }
@@ -369,7 +373,8 @@ final class SyncEngine: NSObject, ObservableObject {
         }
         scanProgress = 1
         let doneKeys = Set(store.done.keys)
-        let pending = result.filter { !doneKeys.contains($0.key) && !inflightKeys.contains($0.key) }
+        let readyKeys = Set(readyQueue.map(\.key))
+        let pending = result.filter { !doneKeys.contains($0.key) && !inflightKeys.contains($0.key) && !readyKeys.contains($0.key) }
 
         totalInScope = result.count
         doneInScope = result.count - pending.count - inflightKeys.count
@@ -557,15 +562,86 @@ final class SyncEngine: NSObject, ObservableObject {
         func canStart() -> Bool {
             active ? (inflightKeys.count + exporting) < limit : (exporting < 2 && inflightKeys.count < 40)
         }
-        while running && canStart() && !queue.isEmpty {
+        while running && canStart() && (!readyQueue.isEmpty || !queue.isEmpty) {
+            // Сначала — уже подготовленные файлы (после сбоя сети, застывания, возврата из фона).
+            if !readyQueue.isEmpty {
+                startUpload(readyQueue.removeFirst())
+                continue
+            }
             let ref = queue.removeFirst()
             exporting += 1
             preparingCount = exporting
             Task { await self.prepareAndUpload(ref) }
         }
-        if queue.isEmpty && inflightKeys.isEmpty && exporting == 0 && state == .syncing {
+        if queue.isEmpty && readyQueue.isEmpty && inflightKeys.isEmpty && exporting == 0 && state == .syncing {
             finish()
         }
+    }
+
+    /// Готовый к отправке файл: запрос + временная копия. Переживает перезапуск передачи без повторного экспорта.
+    struct ReadyUpload {
+        let key: String
+        let request: URLRequest
+        let tmp: URL
+        let desc: String?
+        let name: String
+    }
+    private var readyQueue: [ReadyUpload] = []
+    private var migratingBg: Set<String> = []
+    private var lastNetChange = Date.distantPast
+    private var lastNetKind = ""
+
+    private func startUpload(_ r: ReadyUpload) {
+        guard FileManager.default.fileExists(atPath: r.tmp.path) else {
+            queue.append(PendingRef(key: r.key, assetID: SyncStore.assetID(fromKey: r.key),
+                                    role: r.key.split(separator: "#").last.flatMap { ResourceRole(rawValue: String($0)) } ?? .photo))
+            return
+        }
+        let useFg = UIApplication.shared.applicationState == .active
+        let task = (useFg ? fgSession : activeSession).uploadTask(with: r.request, fromFile: r.tmp)
+        task.taskDescription = r.desc
+        inflightKeys.insert(r.key)
+        if useFg {
+            fgTasks[task.taskIdentifier] = FgTask(task: task, request: r.request, tmp: r.tmp, key: r.key)
+            lastProgressAt[task.taskIdentifier] = Date()
+        }
+        setFile(r.key, r.name, "отправка", 0)
+        task.resume()
+    }
+
+    /// Открыли приложение: забираем передачи из медленной фоновой сессии iOS в быструю.
+    func migrateToForeground() {
+        guard running else { return }
+        for s in sessions.values {
+            s.getAllTasks { tasks in
+                Task { @MainActor in
+                    let e = SyncEngine.shared
+                    var moved = 0
+                    for t in tasks where t.state == .running || t.state == .suspended {
+                        guard let meta = Self.meta(of: t), let req = t.originalRequest else { continue }
+                        let tmp = e.tmpDir.appendingPathComponent(meta.tmp)
+                        guard FileManager.default.fileExists(atPath: tmp.path) else { continue }
+                        e.migratingBg.insert(meta.key)
+                        t.cancel()
+                        e.inflightKeys.remove(meta.key)
+                        e.readyQueue.append(ReadyUpload(key: meta.key, request: req, tmp: tmp, desc: t.taskDescription, name: meta.name))
+                        moved += 1
+                    }
+                    if moved > 0 { e.log.add("Из фона в быструю передачу: \(moved)") }
+                    e.pump()
+                }
+            }
+        }
+    }
+
+    /// Сменилась сеть (LTE ↔ Wi-Fi): старые соединения мертвы — сразу перезапускаем передачи.
+    fileprivate func onNetworkChange(kind: String) {
+        defer { lastNetKind = kind }
+        guard !lastNetKind.isEmpty, kind != lastNetKind, running,
+              UIApplication.shared.applicationState == .active, !fgTasks.isEmpty else { return }
+        lastNetChange = Date()
+        log.add("Сеть сменилась (\(lastNetKind) → \(kind)), перезапускаю передачи: \(fgTasks.count)", .warn)
+        for t in fgTasks.values { t.task.cancel() }
     }
 
     nonisolated static func resourceType(for role: ResourceRole) -> PHAssetResourceType {
@@ -653,17 +729,9 @@ final class SyncEngine: NSObject, ObservableObject {
             var req = try ServerAPI.uploadRequest(path: relPath, id: ref.key, size: size, mtime: info.date,
                                                   kind: kindParam, album: info.album)
             req.allowsCellularAccess = !settings.wifiOnly
-            let useFg = UIApplication.shared.applicationState == .active
-            let task = (useFg ? fgSession : activeSession).uploadTask(with: req, fromFile: tmp)
             let meta = TaskMeta(key: ref.key, path: relPath, tmp: tmp.lastPathComponent, size: size, name: shownName)
-            task.taskDescription = String(data: (try? JSONEncoder().encode(meta)) ?? Data(), encoding: .utf8)
-            inflightKeys.insert(ref.key)
-            if useFg {
-                fgTasks[task.taskIdentifier] = FgTask(task: task, request: req, tmp: tmp, key: ref.key)
-                lastProgressAt[task.taskIdentifier] = Date()
-            }
-            setFile(ref.key, shownName, "отправка", 0)
-            task.resume()
+            let desc = String(data: (try? JSONEncoder().encode(meta)) ?? Data(), encoding: .utf8)
+            startUpload(ReadyUpload(key: ref.key, request: req, tmp: tmp, desc: desc, name: shownName))
         } catch {
             try? FileManager.default.removeItem(at: tmp)
             files[ref.key] = nil
@@ -747,36 +815,49 @@ final class SyncEngine: NSObject, ObservableObject {
         }
     }
 
-    fileprivate func handleComplete(meta: TaskMeta?, taskID: Int, isFg: Bool, status: Int, error: Error?) {
+    fileprivate func handleComplete(meta: TaskMeta?, taskID: Int, isFg: Bool, status: Int, error: Error?,
+                                    request: URLRequest?, desc: String?) {
         guard let meta else { return }
         // Задача перенесена в фоновую сессию — файл и учёт не трогаем.
         if isFg && migrating.contains(taskID) {
             migrating.remove(taskID)
             return
         }
+        // Задача забрана из фоновой сессии в быструю — уже стоит в очереди готовых.
+        if !isFg && migratingBg.contains(meta.key) {
+            migratingBg.remove(meta.key)
+            return
+        }
         let data = responseData.removeValue(forKey: meta.key) ?? Data()
         if isFg { fgTasks[taskID] = nil; lastProgressAt[taskID] = nil }
         inflightKeys.remove(meta.key)
         files[meta.key] = nil
-        try? FileManager.default.removeItem(at: tmpDir.appendingPathComponent(meta.tmp))
+        let tmpURL = tmpDir.appendingPathComponent(meta.tmp)
         let ref = PendingRef(key: meta.key, assetID: SyncStore.assetID(fromKey: meta.key),
                              role: meta.key.split(separator: "#").last.flatMap { ResourceRole(rawValue: String($0)) } ?? .photo)
 
         if let error {
             let ns = error as NSError
-            if ns.code == NSURLErrorCancelled {
-                // отменено сторожем или вручную: при идущей синхронизации — повторим
-                if !requeue(ref, reason: "передача застыла, повторяю") && running {
-                    store.markFailed(meta.key, "Передача несколько раз застывала")
+            // Сбой из-за смены сети не считаем попыткой.
+            let netSwitch = Date().timeIntervalSince(lastNetChange) < 10
+            let n = netSwitch ? (retries[meta.key] ?? 0) : (retries[meta.key] ?? 0) + 1
+            retries[meta.key] = n
+            if running, n <= 4, let request, FileManager.default.fileExists(atPath: tmpURL.path) {
+                // Повторяем отправку с той же временной копией — без нового экспорта.
+                readyQueue.append(ReadyUpload(key: meta.key, request: request, tmp: tmpURL, desc: desc, name: meta.name))
+                if !netSwitch {
+                    log.add("\(meta.name): \(ns.code == NSURLErrorCancelled ? "передача застыла" : error.localizedDescription), повторяю (\(n)/4)", .warn)
                 }
-            } else if requeue(ref, reason: "ошибка сети, повторю") {
-                lastError = error.localizedDescription
             } else {
-                store.markFailed(meta.key, error.localizedDescription)
-                log.add("Ошибка \(meta.name): \(error.localizedDescription)", .error)
-                lastError = error.localizedDescription
+                try? FileManager.default.removeItem(at: tmpURL)
+                if running {
+                    store.markFailed(meta.key, error.localizedDescription)
+                    log.add("Ошибка \(meta.name): \(error.localizedDescription)", .error)
+                    lastError = error.localizedDescription
+                }
             }
         } else if (200..<300).contains(status) {
+            try? FileManager.default.removeItem(at: tmpURL)
             retries[meta.key] = nil
             let resp = try? JSONDecoder().decode(UploadResponse.self, from: data)
             store.markDone(meta.key, path: resp?.path ?? meta.path, size: resp?.size ?? meta.size)
@@ -801,6 +882,7 @@ final class SyncEngine: NSObject, ObservableObject {
             }
             publishProgress()
         } else {
+            try? FileManager.default.removeItem(at: tmpURL)
             let resp = try? JSONDecoder().decode(UploadResponse.self, from: data)
             let msg = status == 401 ? "Неверный токен" : "Сервер ответил \(status) \(resp?.error ?? "")"
             store.markFailed(meta.key, msg)
@@ -942,7 +1024,11 @@ extension SyncEngine: URLSessionDataDelegate {
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
         let id = task.taskIdentifier
         let isFg = session.configuration.identifier == nil
-        Task { @MainActor in self.handleComplete(meta: meta, taskID: id, isFg: isFg, status: status, error: error) }
+        let req = task.originalRequest
+        let desc = task.taskDescription
+        Task { @MainActor in
+            self.handleComplete(meta: meta, taskID: id, isFg: isFg, status: status, error: error, request: req, desc: desc)
+        }
     }
 
     nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {

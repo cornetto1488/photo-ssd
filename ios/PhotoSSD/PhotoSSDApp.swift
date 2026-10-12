@@ -53,6 +53,7 @@ struct PhotoSSDApp: App {
             switch p {
             case .active:
                 engine.resetNightReport()
+                engine.migrateToForeground()
                 Task {
                     await engine.refreshServer()
                     if settings.onboarded && settings.autoStart { engine.start(reason: "открытие") }
