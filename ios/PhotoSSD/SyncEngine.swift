@@ -150,6 +150,7 @@ final class SyncEngine: NSObject, ObservableObject {
             let wifi = path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet)
             let kind = path.status != .satisfied ? "нет сети" : (wifi ? "Wi-Fi" : (path.usesInterfaceType(.cellular) ? "LTE" : "другая"))
             Task { @MainActor in
+                SyncEngine.shared.netUp = path.status == .satisfied
                 SyncEngine.shared.onWifiChange(wifi)
                 SyncEngine.shared.onNetworkChange(kind: kind)
             }
@@ -159,6 +160,8 @@ final class SyncEngine: NSObject, ObservableObject {
 
     private let pathMonitor = NWPathMonitor()
     private(set) var onWifi = true
+
+    private(set) var netUp = true
 
     fileprivate func onWifiChange(_ wifi: Bool) {
         onWifi = wifi
@@ -224,7 +227,8 @@ final class SyncEngine: NSObject, ObservableObject {
     /// Пока приложение свёрнуто, iOS даёт ~30 секунд: готовим пачку файлов и отдаём её на фоновую передачу.
     /// Когда пачка уйдёт, iOS разбудит приложение — и мы приготовим следующую.
     func backgroundRefill(reason: String) {
-        guard settings.onboarded, settings.backgroundEnabled || settings.smartNight || running else { return }
+        guard settings.onboarded, state != .paused,
+              settings.backgroundEnabled || settings.smartNight || running else { return }
         var bgID: UIBackgroundTaskIdentifier = .invalid
         bgID = UIApplication.shared.beginBackgroundTask(withName: "zalet.refill") {
             Task { @MainActor in
@@ -260,7 +264,9 @@ final class SyncEngine: NSObject, ObservableObject {
         for (id, t) in fgTasks {
             migrating.insert(id)
             t.task.cancel()
-            let nt = bg.uploadTask(with: t.request, fromFile: t.tmp)
+            var req = t.request
+            req.allowsCellularAccess = !settings.wifiOnly
+            let nt = bg.uploadTask(with: req, fromFile: t.tmp)
             nt.taskDescription = t.task.taskDescription
             nt.resume()
         }
@@ -275,7 +281,7 @@ final class SyncEngine: NSObject, ObservableObject {
         watchdog = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 15_000_000_000)
-                guard let self, self.running else { continue }
+                guard let self, self.running, self.netUp else { continue }
                 let now = Date()
                 for (id, t) in self.fgTasks {
                     let last = self.lastProgressAt[id] ?? now
@@ -344,6 +350,10 @@ final class SyncEngine: NSObject, ObservableObject {
     func stopAll() {
         pause()
         for s in sessions.values { s.getAllTasks { $0.forEach { $0.cancel() } } }
+        for t in fgTasks.values { t.task.cancel() }
+        for r in readyQueue { try? FileManager.default.removeItem(at: r.tmp) }
+        readyQueue.removeAll()
+        files.removeAll()
     }
 
     private func run(reason: String) async {
@@ -391,6 +401,7 @@ final class SyncEngine: NSObject, ObservableObject {
         sessionStart = Date()
         retries.removeAll()
         startWatchdog()
+        if UIApplication.shared.applicationState == .active { migrateToForeground() }
         sessionPending = pending.count
         if UIApplication.shared.applicationState == .active {
             LiveActivityManager.start(done: doneInScope, total: totalInScope)
@@ -598,11 +609,13 @@ final class SyncEngine: NSObject, ObservableObject {
             return
         }
         let useFg = UIApplication.shared.applicationState == .active
-        let task = (useFg ? fgSession : activeSession).uploadTask(with: r.request, fromFile: r.tmp)
+        var req = r.request
+        req.allowsCellularAccess = !settings.wifiOnly   // старые задачи могли помнить «только Wi-Fi»
+        let task = (useFg ? fgSession : activeSession).uploadTask(with: req, fromFile: r.tmp)
         task.taskDescription = r.desc
         inflightKeys.insert(r.key)
         if useFg {
-            fgTasks[task.taskIdentifier] = FgTask(task: task, request: r.request, tmp: r.tmp, key: r.key)
+            fgTasks[task.taskIdentifier] = FgTask(task: task, request: req, tmp: r.tmp, key: r.key)
             lastProgressAt[task.taskIdentifier] = Date()
         }
         setFile(r.key, r.name, "отправка", 0)
@@ -662,7 +675,13 @@ final class SyncEngine: NSObject, ObservableObject {
     }
 
     private func prepareAndUpload(_ ref: PendingRef) async {
-        defer { exporting -= 1; preparingCount = exporting; queuedKeys.remove(ref.key); pump() }
+        defer {
+            exporting -= 1
+            preparingCount = exporting
+            queuedKeys.remove(ref.key)
+            if !inflightKeys.contains(ref.key) && !readyQueue.contains(where: { $0.key == ref.key }) { files[ref.key] = nil }
+            pump()
+        }
         guard running else { return }
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [ref.assetID], options: nil).firstObject else {
             store.markFailed(ref.key, "Снимок удалён из медиатеки")

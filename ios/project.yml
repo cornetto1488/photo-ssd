@@ -7,8 +7,8 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "2.0.5"
-    CURRENT_PROJECT_VERSION: "7"
+    MARKETING_VERSION: "2.0.6"
+    CURRENT_PROJECT_VERSION: "8"
     TARGETED_DEVICE_FAMILY: "1"
     CODE_SIGNING_ALLOWED: "NO"
     CODE_SIGNING_REQUIRED: "NO"
@@ -47,3 +47,25 @@ targets:
         GENERATE_INFOPLIST_FILE: "NO"
         CODE_SIGN_ENTITLEMENTS: Entitlements/PhotoSSD.entitlements
         SKIP_INSTALL: "YES"
+
+  ZaletUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ZaletUITests
+    dependencies:
+      - target: PhotoSSD
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.apodmarchuk.photossd.uitests
+        GENERATE_INFOPLIST_FILE: "YES"
+        TEST_TARGET_NAME: PhotoSSD
+
+schemes:
+  PhotoSSD:
+    build:
+      targets:
+        PhotoSSD: all
+    test:
+      targets:
+        - ZaletUITests

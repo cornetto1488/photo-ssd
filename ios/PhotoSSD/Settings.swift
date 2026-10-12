@@ -212,6 +212,20 @@ final class AppSettings: ObservableObject {
         liveActivity = b("liveActivity", true)
 
         onboarded = b("onboarded", false)
+
+        // Режим автотеста (запуск из ZaletUITests): адрес и токен — из окружения.
+        if ProcessInfo.processInfo.arguments.contains("-zaletUITest") {
+            let env = ProcessInfo.processInfo.environment
+            serverURL = env["ZALET_SERVER"] ?? serverURL
+            token = env["ZALET_TOKEN"] ?? token
+            onboarded = true
+            autoStart = true
+            wifiOnly = false
+            backgroundEnabled = false
+            smartNight = false
+            liveActivity = false
+            haptics = false
+        }
     }
 
     var effectiveTemplate: String {

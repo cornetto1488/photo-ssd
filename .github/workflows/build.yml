@@ -62,3 +62,65 @@ jobs:
         with:
           name: PhotoSSD-ipa
           path: PhotoSSD-unsigned.ipa
+
+  e2e:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Start photossd (test server)
+        run: |
+          cd server && go build -o /tmp/photossd . && cd ..
+          mkdir -p /tmp/zalet-root
+          echo "e2e-test-token-123" > /tmp/zalet.token
+          nohup /tmp/photossd -listen 127.0.0.1:8099 -root /tmp/zalet-root -token-file /tmp/zalet.token > /tmp/photossd.log 2>&1 &
+          sleep 2
+          curl -fsS -H "Authorization: Bearer e2e-test-token-123" http://127.0.0.1:8099/api/v1/ping
+      - name: Test media (6 JPEG + 2 HEIC)
+        run: |
+          mkdir -p /tmp/src /tmp/media
+          python3 ci/make_media.py /tmp/src 8
+          for i in 0 1 2 3 4 5; do sips -s format jpeg /tmp/src/src$i.bmp --out /tmp/media/ZTEST_$i.jpg > /dev/null; done
+          for i in 6 7; do sips -s format heic /tmp/src/src$i.bmp --out /tmp/media/ZTEST_$i.heic > /dev/null; done
+          ls -la /tmp/media
+      - name: Fonts
+        run: |
+          mkdir -p ios/Shared/Fonts
+          curl -fsSL -o ios/Shared/Fonts/Onest.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/onest/Onest%5Bwght%5D.ttf"
+          curl -fsSL -o ios/Shared/Fonts/Inter.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
+          curl -fsSL -o ios/Shared/Fonts/JetBrainsMono.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
+      - name: Simulator with photos
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['udid'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "UDID=$UDID" >> $GITHUB_ENV
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl addmedia "$UDID" /tmp/media/ZTEST_*
+          xcrun simctl privacy "$UDID" grant photos ru.apodmarchuk.photossd || true
+          xcrun simctl privacy "$UDID" grant photos-add ru.apodmarchuk.photossd || true
+      - name: E2E test
+        env:
+          TEST_RUNNER_ZALET_SERVER: http://127.0.0.1:8099
+          TEST_RUNNER_ZALET_TOKEN: e2e-test-token-123
+          TEST_RUNNER_ZALET_EXPECTED: "8"
+        run: |
+          brew install xcodegen
+          cd ios && xcodegen generate
+          xcodebuild test -project PhotoSSD.xcodeproj -scheme PhotoSSD -destination "id=$UDID" \
+            -derivedDataPath build-sim -resultBundlePath /tmp/e2e.xcresult \
+            CODE_SIGNING_ALLOWED=NO > /tmp/e2e.log 2>&1 \
+            || { grep -E "error:|failed|XCTAssert|Test Case .* (passed|failed)" /tmp/e2e.log | head -60; echo "--- сервер:"; tail -60 /tmp/photossd.log; exit 1; }
+          grep -E "Test Case .* (passed|failed)|Executed" /tmp/e2e.log | tail -5
+          echo "--- сервер:"; tail -15 /tmp/photossd.log
+          find /tmp/zalet-root -type f -not -path "*/.photossd/*" | sort
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-results
+          path: |
+            /tmp/e2e.xcresult
+            /tmp/e2e.log
+            /tmp/photossd.log
