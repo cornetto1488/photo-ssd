@@ -77,20 +77,10 @@
             <button class="btn" data-act="alloff">✦ Выключить весь свет</button>
           </div>
         </div>
-        <div class="sky" id="sky">
-          <div class="stars" id="stars"></div>
-          <div class="orb" id="orb"></div>
-          <div class="house">
-            <svg viewBox="0 0 120 100">
-              <path class="roof" d="M10 50 60 12l50 38"/>
-              <rect class="wall" x="22" y="46" width="76" height="46" rx="3"/>
-              <rect class="win" x="34" y="58" width="18" height="16" rx="2"/>
-              <rect class="win w2" x="68" y="58" width="18" height="16" rx="2"/>
-              <rect class="door" x="53" y="70" width="14" height="22" rx="2"/>
-              <path class="smoke" d="M86 24c-4-6 4-8 0-14"/>
-            </svg>
-          </div>
-          <div class="sky-cap mono-label" id="skyCap">ДОМ</div>
+        <div class="netviz" id="netviz">
+          <canvas id="netCanvas"></canvas>
+          <div class="nv-cap mono-label"><span class="live-dot"></span> СЕТЬ ДОМА · <span id="nvCount">…</span></div>
+          <div class="nv-legend mono-label"><i class="lg-pc"></i>ПК <i class="lg-dev"></i>умный дом <i class="lg-cl"></i>устройства</div>
         </div>
       </div>
 
@@ -99,10 +89,25 @@
       <div class="grid tiles" id="tiles"></div>
 
       <div class="section-head">
-        <div class="mono-label"><span class="acc">// 02</span> ИЗ ВАШЕЙ ГАЛЕРЕИ</div>
-        <button class="btn btn-sm" id="shuffleBtn">↻ Другие фото</button>
+        <div class="mono-label"><span class="acc">// 02</span> МОИ ПРОЕКТЫ</div>
       </div>
-      <div class="mosaic" id="mosaic"></div>
+      <div class="projects" id="projects">
+        <a class="proj proj-cv" href="https://apodmarchuk.ru" target="_blank" rel="noopener">
+          <div class="proj-bg" style="background-image:url('https://apodmarchuk.ru/assets/ph/about-rack.jpg')"></div>
+          <div class="proj-top"><span class="mono-label">САЙТ-РЕЗЮМЕ</span><span class="state" data-site="https://apodmarchuk.ru"><span class="dot"></span>проверяю…</span></div>
+          <div class="proj-title display">СИСТЕМНЫЙ<br>АДМИНИ<span class="grad">СТРАТОР</span></div>
+          <p>Андрей Подмарчук · сети · серверы · информационная безопасность</p>
+          <div class="proj-foot"><span class="addr">apodmarchuk.ru</span><span class="go">Открыть ↗</span></div>
+        </a>
+        <a class="proj proj-vpn" href="https://vpnushka.lol" target="_blank" rel="noopener">
+          <div class="proj-glow"></div>
+          <div class="proj-top"><span class="mono-label">МОЙ ПРОЕКТ</span><span class="state" data-site="https://vpnushka.lol"><span class="dot"></span>проверяю…</span></div>
+          <div class="proj-logo"><img src="https://vpnushka.lol/favicon.png" alt="" onerror="this.style.display='none'"></div>
+          <div class="proj-title display">ВПН<br><span class="grad">УШКА</span></div>
+          <p>Стабильный доступ, который не отвлекает от прекрасного.</p>
+          <div class="proj-foot"><span class="addr">vpnushka.lol</span><span class="go">Открыть ↗</span></div>
+        </a>
+      </div>
 
       <div class="section-head">
         <div class="mono-label"><span class="acc">// 03</span> БЫСТРЫЙ ДОСТУП</div>
@@ -158,8 +163,12 @@
         </div>
       </div>
       <div class="grid stats" id="photoStats"></div>
-      <div class="mono-label section-label">ПОСЛЕДНИЕ ЗАЛЁТЫ</div>
-      <div class="thumbs" id="thumbs"></div>
+      <div class="section-head">
+        <div class="chips" id="galChips" style="margin:0"></div>
+        <span class="mono-label" id="galCount"></span>
+      </div>
+      <div id="gallery"></div>
+      <div class="gal-more" id="galMore"><div class="spinner"></div></div>
     </section>
 
     <!-- СЕТЬ -->
@@ -223,6 +232,34 @@
     <a data-page="logs"><i>≡</i>Журналы</a>
     <a data-page="more"><i>⋯</i>Ещё</a>
   </nav>
+</div>
+
+<!-- Просмотр фото -->
+<div class="lightbox hidden" id="lightbox">
+  <div class="lb-bar">
+    <button class="icon-btn" id="lbClose">✕</button>
+    <div class="lb-info"><b id="lbDate"></b><span id="lbMeta"></span></div>
+    <a class="icon-btn" id="lbDownload" title="Скачать" download>⤓</a>
+  </div>
+  <div class="lb-stage" id="lbStage">
+    <button class="lb-nav prev" id="lbPrev">‹</button>
+    <div class="lb-media" id="lbMedia"></div>
+    <button class="lb-nav next" id="lbNext">›</button>
+  </div>
+  <div class="lb-count mono-label" id="lbCount"></div>
+</div>
+
+<!-- Подтверждение -->
+<div class="modal hidden" id="confirmModal">
+  <div class="modal-card confirm-card">
+    <div class="confirm-ico" id="cfIco">⏻</div>
+    <h3 class="display" id="cfTitle">Вы уверены?</h3>
+    <p class="muted" id="cfText"></p>
+    <div class="confirm-actions">
+      <button class="btn" id="cfNo">Отмена</button>
+      <button class="btn btn-acc" id="cfYes">Да</button>
+    </div>
+  </div>
 </div>
 
 <!-- Встроенное окно сервиса -->

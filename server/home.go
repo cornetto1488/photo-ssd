@@ -660,6 +660,39 @@ func (p *homePortal) handleRandom(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": pool})
 }
 
+// ---------- мои проекты: онлайн ли сайты ----------
+
+var mySites = []string{"https://apodmarchuk.ru", "https://vpnushka.lol"}
+
+func (p *homePortal) handleSites(w http.ResponseWriter, r *http.Request) {
+	type res struct {
+		URL  string `json:"url"`
+		OK   bool   `json:"ok"`
+		Code int    `json:"code"`
+		Ms   int64  `json:"ms"`
+	}
+	out := make([]res, len(mySites))
+	var wg sync.WaitGroup
+	cl := &http.Client{Timeout: 8 * time.Second}
+	for i, u := range mySites {
+		wg.Add(1)
+		go func(i int, u string) {
+			defer wg.Done()
+			t := time.Now()
+			resp, err := cl.Get(u)
+			out[i] = res{URL: u, Ms: time.Since(t).Milliseconds()}
+			if err == nil {
+				io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+				resp.Body.Close()
+				out[i].Code = resp.StatusCode
+				out[i].OK = resp.StatusCode < 400
+			}
+		}(i, u)
+	}
+	wg.Wait()
+	writeJSON(w, http.StatusOK, map[string]any{"sites": out})
+}
+
 // ---------- управление службами ----------
 
 var allowedServices = map[string]string{
@@ -1007,6 +1040,7 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/random":  p.handleRandom,
 		"/api/home/service": p.handleService,
 		"/api/home/info":    p.handleInfo,
+		"/api/home/sites":   p.handleSites,
 	}
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))

@@ -183,10 +183,14 @@ $$("[data-page]").forEach((a) => a.onclick = () => go(a.dataset.page));
 // быстрые действия
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-act]"); if (!b) return;
-  const act = b.dataset.act; b.disabled = true;
+  const act = b.dataset.act;
+  if (act === "pc-off" && !(await askConfirm({ icon: "⏻", title: "Выключить компьютер?", text: "Windows корректно завершит работу. Несохранённые файлы лучше сохранить.", yes: "Да, выключить", danger: true }))) return;
+  if (act === "pc-on" && !(await askConfirm({ icon: "⏻", title: "Включить компьютер?", text: "Отправлю сигнал Wake-on-LAN — ПК загрузится примерно за минуту.", yes: "Включить" }))) return;
+  if (act === "alloff" && !(await askConfirm({ icon: "✦", title: "Выключить весь свет?", text: "Погаснут все лампы и выключатели. Компьютер не затронется.", yes: "Выключить" }))) return;
+  b.disabled = true;
   try {
     if (act === "pc-on") { await post("/api/home/pc?action=on"); toast("Включаю компьютер…"); }
-    if (act === "pc-off") { if (!confirm("Выключить компьютер?")) return; await post("/api/home/pc?action=off"); toast("Компьютер выключается"); }
+    if (act === "pc-off") { await post("/api/home/pc?action=off"); toast("Компьютер выключается"); }
     if (act === "alloff") { const r = await post("/api/home/alloff"); toast(`Выключено: ${r.done}${r.failed ? `, не ответили: ${r.failed}` : ""}`); loadDevices(true); }
     setTimeout(loadStatus, 1500);
   } catch (err) { toast(err.message, true); }
@@ -273,7 +277,11 @@ function devCard(d) {
   } else if (d.kind === "pc") {
     on = status ? status.pc.online : !!val(d, "switch_1");
   }
-  const canToggle = ["light", "switch", "plug", "pc"].includes(d.kind);
+  const canToggle = ["light", "switch", "plug"].includes(d.kind);
+  if (d.kind === "pc") {
+    controls = `<div class="pc-btns" style="margin-left:0"><button class="btn btn-acc" data-act="pc-on" ${on ? "disabled" : ""}>⏻ Включить</button>
+      <button class="btn btn-danger" data-act="pc-off" ${on ? "" : "disabled"}>Выключить</button></div>`;
+  }
   const kindName = { light: "лампа", switch: "выключатель", plug: "розетка", pc: "компьютер · Маруся", gateway: "шлюз", other: "устройство" }[d.kind] || "";
   return `<div class="dev ${on ? "on" : ""} ${d.online ? "" : "offline"}" data-dev="${d.id}">
     <div class="top-row">
@@ -310,7 +318,6 @@ document.addEventListener("change", async (e) => {
   if (t.dataset.toggle) {
     const d = devices.find((x) => x.id === t.dataset.toggle); if (!d) return;
     const on = t.checked; t.closest(".dev").classList.toggle("on", on);
-    if (d.kind === "pc") { try { await post("/api/home/pc?action=" + (on ? "on" : "off")); toast(on ? "Включаю компьютер…" : "Выключаю компьютер…"); } catch (er) { toast(er.message, true); } return; }
     const code = d.kind === "light" ? "switch_led" : "switch_1";
     await sendCmd(d.id, [{ code, value: on }], `${d.name}: ${on ? "включено" : "выключено"}`);
     renderDevices();
@@ -341,13 +348,126 @@ async function loadPhotos() {
       stat("Видео", (kinds.video?.count || 0).toLocaleString("ru-RU"), fmtBytes(kinds.video?.bytes || 0)),
       stat("Скриншоты", (kinds.screenshot?.count || 0).toLocaleString("ru-RU"), fmtBytes(kinds.screenshot?.bytes || 0)),
     ].join("");
-    $("#thumbs").innerHTML = (items.items || []).map((it) => {
-      const name = it.path.split("/").pop();
-      return `<a href="/api/v1/file?id=${encodeURIComponent(it.id)}" target="_blank" title="${esc(it.path)}">
-        <img src="/api/v1/thumb?id=${encodeURIComponent(it.id)}" loading="lazy" alt="" onerror="this.style.opacity=.15">
-        <span class="cap">${esc(name)}</span></a>`;
-    }).join("") || `<p class="muted">Пока пусто.</p>`;
   } catch (e) { $("#photoStats").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
+  if (!gal.items.length) galReset();
+}
+
+// ---------- галерея ----------
+const gal = { kind: "", items: [], total: 0, loading: false, done: false };
+const GAL_KINDS = [["", "Все"], ["photo", "Фото"], ["live", "Live"], ["video", "Видео"], ["screenshot", "Скриншоты"]];
+$("#galChips").innerHTML = GAL_KINDS.map(([k, v]) => `<button class="chip ${k === "" ? "active" : ""}" data-gk="${k}">${v}</button>`).join("");
+$$("#galChips .chip").forEach((c) => c.onclick = () => { gal.kind = c.dataset.gk; $$("#galChips .chip").forEach((x) => x.classList.toggle("active", x === c)); galReset(); });
+const monthKey = (it) => { const d = new Date((it.date || it.time) * 1000); return d.getFullYear() + "-" + d.getMonth(); };
+const monthTitle = (it) => { const d = new Date((it.date || it.time) * 1000); return d.toLocaleDateString("ru-RU", { month: "long", year: "numeric" }); };
+function galReset() { gal.items = []; gal.total = 0; gal.done = false; $("#gallery").innerHTML = ""; galMore(); }
+async function galMore() {
+  if (gal.loading || gal.done) return;
+  gal.loading = true; $("#galMore").style.display = "grid";
+  try {
+    const q = `/api/v1/items?limit=120&offset=${gal.items.length}${gal.kind ? "&kind=" + gal.kind : ""}`;
+    const r = await api(q);
+    const start = gal.items.length;
+    gal.items.push(...(r.items || [])); gal.total = r.total;
+    if (gal.items.length >= r.total || !(r.items || []).length) gal.done = true;
+    $("#galCount").textContent = `${gal.total.toLocaleString("ru-RU")} ${plural(gal.total, "файл", "файла", "файлов")}`;
+    // дорисовываем по месяцам
+    let html = "", lastKey = start > 0 ? monthKey(gal.items[start - 1]) : "";
+    let grid = start > 0 ? $("#gallery .gal-grid:last-of-type") : null;
+    const chunks = [];
+    for (let i = start; i < gal.items.length; i++) {
+      const it = gal.items[i], k = monthKey(it);
+      if (k !== lastKey) { chunks.push({ title: monthTitle(it), cells: [] }); lastKey = k; }
+      const cell = `<a data-gi="${i}"><img loading="lazy" src="/api/v1/thumb?id=${encodeURIComponent(it.id)}" alt="" onload="this.classList.add('show')" onerror="this.style.opacity=.12">${it.kind === "video" ? `<span class="badge">▶</span>` : it.kind === "live" ? `<span class="badge">LIVE</span>` : ""}</a>`;
+      if (!chunks.length && grid) grid.insertAdjacentHTML("beforeend", cell); else chunks[chunks.length - 1].cells.push(cell);
+    }
+    html = chunks.map((c) => `<div class="gal-month"><h3>${esc(c.title)}</h3></div><div class="gal-grid">${c.cells.join("")}</div>`).join("");
+    $("#gallery").insertAdjacentHTML("beforeend", html);
+    if (!gal.items.length) $("#gallery").innerHTML = `<p class="muted">Пока пусто.</p>`;
+  } catch (e) { toast(e.message, true); }
+  gal.loading = false; $("#galMore").style.display = gal.done ? "none" : "grid";
+}
+$("#gallery").addEventListener("click", (e) => { const a = e.target.closest("[data-gi]"); if (a) lbOpen(Number(a.dataset.gi)); });
+new IntersectionObserver((en) => { if (en[0].isIntersecting && page === "photos") galMore(); }, { rootMargin: "800px" }).observe($("#galMore"));
+
+// ---------- просмотр: листание свайпом, стрелками, клавишами ----------
+let lbIndex = -1;
+function lbOpen(i) { lbIndex = i; $("#lightbox").classList.remove("hidden"); document.body.style.overflow = "hidden"; lbShow(0); }
+function lbClose() { $("#lightbox").classList.add("hidden"); document.body.style.overflow = ""; $("#lbMedia").innerHTML = ""; lbIndex = -1; }
+function lbShow(dir) {
+  const it = gal.items[lbIndex]; if (!it) return;
+  const media = $("#lbMedia");
+  const fill = () => {
+    const url = `/api/v1/file?id=${encodeURIComponent(it.id)}`;
+    const thumb = `/api/v1/thumb?id=${encodeURIComponent(it.id)}`;
+    if (it.kind === "video" || /\.(mov|mp4|m4v)$/i.test(it.path)) {
+      media.innerHTML = `<video src="${url}" poster="${thumb}" controls playsinline autoplay></video>`;
+    } else {
+      // сначала превью, потом оригинал (HEIC браузеры кроме Safari не показывают — тогда остаётся превью)
+      media.innerHTML = `<img src="${thumb}" alt="">`;
+      const full = new Image(); full.onload = () => { const im = media.querySelector("img"); if (im && lbIndex === gal.items.indexOf(it)) im.src = url; }; full.src = url;
+    }
+    $("#lbDate").textContent = new Date((it.date || it.time) * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
+    $("#lbMeta").textContent = `${it.path.split("/").pop()} · ${fmtBytes(it.size)}${it.album ? " · " + it.album : ""}`;
+    $("#lbDownload").href = url; $("#lbDownload").setAttribute("download", it.path.split("/").pop());
+    $("#lbCount").textContent = `${lbIndex + 1} / ${gal.total.toLocaleString("ru-RU")}`;
+    media.className = "lb-media";
+  };
+  if (dir) { media.className = "lb-media " + (dir > 0 ? "swipe-l" : "swipe-r"); setTimeout(fill, 180); } else fill();
+  if (lbIndex > gal.items.length - 20) galMore(); // подгружаем дальше заранее
+}
+function lbStep(d) {
+  const n = lbIndex + d;
+  if (n < 0 || n >= gal.items.length) { $("#lbMedia").animate([{ transform: "translateX(0)" }, { transform: `translateX(${d > 0 ? -18 : 18}px)` }, { transform: "translateX(0)" }], 260); return; }
+  lbIndex = n; lbShow(d);
+}
+$("#lbClose").onclick = lbClose;
+$("#lbPrev").onclick = () => lbStep(-1);
+$("#lbNext").onclick = () => lbStep(1);
+document.addEventListener("keydown", (e) => {
+  if ($("#lightbox").classList.contains("hidden")) return;
+  if (e.key === "ArrowLeft") lbStep(-1); else if (e.key === "ArrowRight") lbStep(1); else if (e.key === "Escape") lbClose();
+});
+(() => {
+  let x0 = null, y0 = 0, t0 = 0;
+  const st = $("#lbStage");
+  st.addEventListener("touchstart", (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; t0 = Date.now(); }, { passive: true });
+  st.addEventListener("touchmove", (e) => {
+    if (x0 === null) return; const dx = e.touches[0].clientX - x0;
+    $("#lbMedia").style.transform = `translateX(${dx * .6}px)`; $("#lbMedia").style.transition = "none";
+  }, { passive: true });
+  st.addEventListener("touchend", (e) => {
+    if (x0 === null) return;
+    const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+    $("#lbMedia").style.transform = ""; $("#lbMedia").style.transition = "";
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) lbStep(dx < 0 ? 1 : -1);
+    else if (dy > 120 && Math.abs(dy) > Math.abs(dx)) lbClose(); // смахнуть вниз — закрыть
+    x0 = null;
+  });
+})();
+
+// ---------- подтверждение ----------
+function askConfirm({ icon = "?", title, text = "", yes = "Да", no = "Отмена", danger = false }) {
+  return new Promise((resolve) => {
+    $("#cfIco").textContent = icon; $("#cfTitle").textContent = title; $("#cfText").textContent = text;
+    $("#cfYes").textContent = yes; $("#cfNo").textContent = no;
+    $(".confirm-card").classList.toggle("danger", danger);
+    const m = $("#confirmModal"); m.classList.remove("hidden"); buzz(10);
+    const done = (v) => { m.classList.add("hidden"); $("#cfYes").onclick = $("#cfNo").onclick = m.onclick = null; resolve(v); };
+    $("#cfYes").onclick = () => done(true);
+    $("#cfNo").onclick = () => done(false);
+    m.onclick = (e) => { if (e.target === m) done(false); };
+  });
+}
+
+// ---------- мои проекты ----------
+async function checkSites() {
+  try {
+    const r = await api("/api/home/sites");
+    (r.sites || []).forEach((s) => {
+      const el = $(`[data-site="${s.url}"]`); if (!el) return;
+      el.innerHTML = `<span class="dot ${s.ok ? "ok" : "bad"}"></span>${s.ok ? `онлайн · ${s.ms} мс` : "недоступен"}`;
+    });
+  } catch (e) {}
 }
 
 // ---------- сеть ----------
@@ -401,11 +521,86 @@ function renderSky() {
   }
   $("#skyCap").textContent = night ? "ДОМ · НОЧЬ" : h < 10 ? "ДОМ · УТРО" : h < 17 ? "ДОМ · ДЕНЬ" : "ДОМ · ВЕЧЕР";
 }
-function renderHouse() {
-  const lit = devices.some((d) => d.kind === "light" && val(d, "switch_led")) || devices.some((d) => d.kind === "switch" && val(d, "switch_1"));
-  $$(".house .win")[0]?.classList.toggle("off", devices.length ? !lit : false);
-  $$(".house .win")[1]?.classList.toggle("off", status ? !status.pc.online : false);
-}
+function renderHouse() { netViz.update(); }
+
+// ---------- карта сети: роутер в центре, вокруг реальные устройства, по линиям бегут пакеты ----------
+async function loadClientsQuiet() { try { clients = (await api("/api/home/clients")).clients || []; netViz.update(); } catch (e) {} }
+const netViz = (() => {
+  const cv = $("#netCanvas"); const ctx = cv.getContext("2d");
+  let nodes = [], packets = [], W = 0, H = 0, dpr = 1, raf = 0, t0 = performance.now();
+  const COL = { pc: [255, 90, 31], dev: [59, 224, 140], cl: [154, 163, 214] };
+  function resize() {
+    const r = cv.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1);
+    W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); layout();
+  }
+  function update() {
+    const list = [];
+    if (status) list.push({ id: "pc", label: "ПК", type: "pc", on: status.pc.online });
+    devices.filter((d) => d.kind !== "pc" && d.kind !== "gateway").forEach((d) =>
+      list.push({ id: d.id, label: d.name.replace("Лампочка", "Лампа"), type: "dev", on: d.online && !!(d.kind === "light" ? val(d, "switch_led") : val(d, "switch_1")), online: d.online }));
+    clients.filter((c) => c.online && c.ip !== status?.pc.ip).slice(0, 12).forEach((c) =>
+      list.push({ id: c.mac, label: (c.name || c.ip.split(".").pop()).slice(0, 14), type: "cl", on: true }));
+    const old = Object.fromEntries(nodes.map((n) => [n.id, n]));
+    nodes = list.map((n, i) => ({ ...n, phase: old[n.id]?.phase ?? Math.random() * 6.28, i }));
+    $("#nvCount").textContent = `${nodes.filter((n) => n.type === "cl" || n.on).length} АКТИВНО`;
+    layout();
+  }
+  function layout() {
+    const cx = W / 2, cy = H / 2, n = nodes.length || 1;
+    nodes.forEach((nd, i) => {
+      const ring = nd.type === "cl" ? 0.42 : nd.type === "pc" ? 0.2 : 0.31;
+      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+      nd.bx = cx + Math.cos(a) * Math.min(W, H) * ring * 1.15; nd.by = cy + Math.sin(a) * Math.min(W, H) * ring;
+    });
+  }
+  function draw(now) {
+    const t = (now - t0) / 1000, cx = W / 2, cy = H / 2;
+    ctx.clearRect(0, 0, W, H);
+    // кольца-радар
+    for (let k = 1; k <= 3; k++) {
+      ctx.beginPath(); ctx.ellipse(cx, cy, Math.min(W, H) * (0.14 * k + 0.06) * 1.15, Math.min(W, H) * (0.14 * k + 0.06), 0, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(242,240,237,${0.05 - k * 0.008})`; ctx.lineWidth = 1; ctx.stroke();
+    }
+    const sweep = (t * 0.6) % (Math.PI * 2);
+    const grad = ctx.createConicGradient ? ctx.createConicGradient(sweep, cx, cy) : null;
+    if (grad) { grad.addColorStop(0, "rgba(255,90,31,.18)"); grad.addColorStop(0.08, "rgba(255,90,31,0)"); grad.addColorStop(1, "rgba(255,90,31,0)");
+      ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx, cy, Math.max(W, H), 0, Math.PI * 2); ctx.fill(); }
+    // связи и пакеты
+    nodes.forEach((nd) => {
+      nd.x = nd.bx + Math.sin(t * 0.7 + nd.phase) * 4; nd.y = nd.by + Math.cos(t * 0.6 + nd.phase) * 4;
+      const c = COL[nd.type], alpha = nd.on ? 0.35 : 0.1;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nd.x, nd.y);
+      ctx.strokeStyle = `rgba(${c},${alpha})`; ctx.lineWidth = nd.type === "pc" ? 1.6 : 1; ctx.setLineDash(nd.on ? [] : [3, 5]); ctx.stroke(); ctx.setLineDash([]);
+      if (nd.on && Math.random() < (nd.type === "pc" ? 0.05 : 0.02)) packets.push({ n: nd, p: 0, out: Math.random() < 0.5, sp: 0.5 + Math.random() * 0.6 });
+    });
+    packets = packets.filter((pk) => (pk.p += pk.sp * 0.016) < 1);
+    packets.forEach((pk) => {
+      const f = pk.out ? pk.p : 1 - pk.p, x = cx + (pk.n.x - cx) * f, y = cy + (pk.n.y - cy) * f, c = COL[pk.n.type];
+      ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fillStyle = `rgba(${c},.95)`; ctx.shadowColor = `rgb(${c})`; ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
+    });
+    // узлы
+    ctx.font = "500 10px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
+    nodes.forEach((nd) => {
+      const c = COL[nd.type], r = nd.type === "pc" ? 7 : 4.5;
+      if (nd.on) { ctx.beginPath(); ctx.arc(nd.x, nd.y, r + 6 + Math.sin(t * 2 + nd.phase) * 2, 0, Math.PI * 2); ctx.fillStyle = `rgba(${c},.12)`; ctx.fill(); }
+      ctx.beginPath(); ctx.arc(nd.x, nd.y, r, 0, Math.PI * 2); ctx.fillStyle = nd.on ? `rgb(${c})` : "rgba(91,91,100,.9)"; ctx.fill();
+      ctx.fillStyle = nd.on ? "rgba(242,240,237,.85)" : "rgba(140,140,150,.6)"; ctx.fillText(nd.label, nd.x, nd.y + r + 13);
+    });
+    // роутер в центре
+    const pulse = 1 + Math.sin(t * 2.2) * 0.06;
+    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 46 * pulse); g.addColorStop(0, "rgba(255,138,76,.55)"); g.addColorStop(1, "rgba(255,90,31,0)");
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 46 * pulse, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI / 4);
+    const s = 26; const lg = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); lg.addColorStop(0, "#ff8a4c"); lg.addColorStop(1, "#ff5a1f");
+    ctx.fillStyle = lg; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-s / 2, -s / 2, s, s, 7) : ctx.rect(-s / 2, -s / 2, s, s); ctx.fill(); ctx.restore();
+    ctx.fillStyle = "rgba(242,240,237,.9)"; ctx.font = "700 11px 'Onest', sans-serif"; ctx.fillText("РОУТЕР", cx, cy + 34);
+    raf = requestAnimationFrame(draw);
+  }
+  function start() { resize(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+  window.addEventListener("resize", () => { if (W) resize(); });
+  document.addEventListener("visibilitychange", () => { if (document.hidden) cancelAnimationFrame(raf); else if (W) raf = requestAnimationFrame(draw); });
+  return { start, update };
+})();
 function renderMarquee() {
   const s = status; if (!s) return;
   const sv = s.services;
@@ -449,7 +644,6 @@ function rotateMosaic() {
     ph.querySelector(".when").textContent = new Date((next.date || next.time) * 1000).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric" });
   };
 }
-$("#shuffleBtn").onclick = loadMosaic;
 
 // ---------- встроенное окно сервиса ----------
 function openViewer(title, url) {
@@ -503,7 +697,8 @@ async function loadServiceInfo() { try { svcInfo = await api("/api/home/info"); 
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-svc]"); if (!b) return;
   const [name, action] = b.dataset.svc.split(":");
-  if (action === "stop" && !confirm(`Остановить «${svcInfo?.services?.[name] || name}»?`)) return;
+  if (action === "stop" && !(await askConfirm({ icon: "■", title: "Остановить службу?", text: `«${svcInfo?.services?.[name] || name}» перестанет работать, пока вы её не запустите.`, yes: "Остановить", danger: true }))) return;
+  if (action === "restart" && !(await askConfirm({ icon: "↻", title: "Перезапустить?", text: `«${svcInfo?.services?.[name] || name}» на несколько секунд будет недоступна.`, yes: "Перезапустить" }))) return;
   b.disabled = true;
   try { await post(`/api/home/service?name=${name}&action=${action}`); toast(({ restart: "Перезапущено", stop: "Остановлено", start: "Запущено" })[action] + ": " + (svcInfo?.services?.[name] || name)); setTimeout(loadStatus, 2500); }
   catch (er) { toast(er.message, true); }
@@ -571,8 +766,9 @@ function start() {
   if (started) return; started = true;
   tick(); renderSky(); timers.clock = setInterval(() => { tick(); renderSky(); }, 10000);
   setTimeout(() => $("#boot").classList.add("done"), 700);
-  loadMosaic(); loadDevices(); loadServiceInfo();
-  timers.mosaic = setInterval(rotateMosaic, 4500);
+  loadDevices(); loadServiceInfo(); loadClientsQuiet(); checkSites(); netViz.start();
+  timers.sites = setInterval(checkSites, 60000);
+  timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
   go(["home", "devices", "pc", "photos", "network", "logs", "services"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
