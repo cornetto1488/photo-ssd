@@ -1,0 +1,5 @@
+ios/PhotoSSD/Fonts/
+ios/build/
+ios/*.xcodeproj/
+*.ipa
+dist/
