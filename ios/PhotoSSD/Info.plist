@@ -60,6 +60,7 @@
 	<array>
 		<string>ru.apodmarchuk.photossd.refresh</string>
 		<string>ru.apodmarchuk.photossd.processing</string>
+		<string>ru.apodmarchuk.photossd.continued</string>
 	</array>
 	<key>NSSupportsLiveActivities</key>
 	<true/>

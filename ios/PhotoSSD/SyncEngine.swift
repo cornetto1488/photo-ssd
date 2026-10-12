@@ -224,10 +224,90 @@ final class SyncEngine: NSObject, ObservableObject {
         files[key] = FileProgress(name: name, stage: stage, fraction: fraction)
     }
 
+    // MARK: Продолжение работы в фоне (iOS 26)
+
+    static let continuedTaskID = "ru.apodmarchuk.photossd.continued"
+    /// Пока iOS разрешает продолжать работу (BGContinuedProcessingTask), ведём себя как в открытом приложении.
+    private(set) var keepAlive = false
+    private var continuedTask: AnyObject?
+    private var continuedTotal: Int64 = 0
+
+    var appActiveOrKept: Bool { UIApplication.shared.applicationState == .active || keepAlive }
+
+    static func registerContinued() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            BGTaskScheduler.shared.register(forTaskWithIdentifier: continuedTaskID, using: nil) { task in
+                guard let t = task as? BGContinuedProcessingTask else { task.setTaskCompleted(success: false); return }
+                Task { @MainActor in SyncEngine.shared.runContinued(t) }
+            }
+        }
+        #endif
+    }
+
+    /// Просим iOS продолжать выгрузку после сворачивания. Вызывать, пока приложение на экране.
+    func requestContinued() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *) {
+            guard continuedTask == nil, UIApplication.shared.applicationState == .active else { return }
+            let req = BGContinuedProcessingTaskRequest(identifier: Self.continuedTaskID,
+                                                       title: "ZALET",
+                                                       subtitle: "Выгрузка фото на SSD")
+            req.strategy = .queue
+            do { try BGTaskScheduler.shared.submit(req) }
+            catch { log.add("Фоновое продолжение недоступно: \(error.localizedDescription)", .warn) }
+        }
+        #endif
+    }
+
+    #if compiler(>=6.2)
+    @available(iOS 26.0, *)
+    func runContinued(_ task: BGContinuedProcessingTask) {
+        continuedTask = task
+        keepAlive = true
+        continuedTotal = Int64(max(1, remaining))
+        task.progress.totalUnitCount = continuedTotal
+        task.progress.completedUnitCount = 0
+        log.add("iOS разрешила продолжать выгрузку в фоне", .ok)
+        task.expirationHandler = {
+            Task { @MainActor in
+                let e = SyncEngine.shared
+                e.log.add("iOS остановила фоновое продолжение", .warn)
+                e.endContinued(success: false)
+            }
+        }
+        if !running { start(reason: "фоновое продолжение") }
+    }
+    #endif
+
+    private func continuedProgress() {
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *), let t = continuedTask as? BGContinuedProcessingTask {
+            let done = Int64(sessionUploaded)
+            if done > t.progress.totalUnitCount { t.progress.totalUnitCount = done + Int64(remaining) }
+            t.progress.completedUnitCount = done
+            t.updateTitle("ZALET", subtitle: "Залетело \(sessionUploaded) · осталось \(remaining)")
+        }
+        #endif
+    }
+
+    func endContinued(success: Bool) {
+        let wasKept = keepAlive
+        keepAlive = false
+        #if compiler(>=6.2)
+        if #available(iOS 26.0, *), let t = continuedTask as? BGContinuedProcessingTask {
+            t.setTaskCompleted(success: success)
+        }
+        #endif
+        continuedTask = nil
+        // Если приложение уже свёрнуто — оставшиеся передачи отдаём обычной фоновой сессии.
+        if wasKept && UIApplication.shared.applicationState != .active { migrateToBackground() }
+    }
+
     /// Пока приложение свёрнуто, iOS даёт ~30 секунд: готовим пачку файлов и отдаём её на фоновую передачу.
     /// Когда пачка уйдёт, iOS разбудит приложение — и мы приготовим следующую.
     func backgroundRefill(reason: String) {
-        guard settings.onboarded, state != .paused,
+        guard settings.onboarded, state != .paused, !keepAlive,
               settings.backgroundEnabled || settings.smartNight || running else { return }
         var bgID: UIBackgroundTaskIdentifier = .invalid
         bgID = UIApplication.shared.beginBackgroundTask(withName: "zalet.refill") {
@@ -259,7 +339,7 @@ final class SyncEngine: NSObject, ObservableObject {
 
     /// При сворачивании переносим незавершённые быстрые передачи в фоновую сессию.
     func migrateToBackground() {
-        guard !fgTasks.isEmpty else { return }
+        guard !fgTasks.isEmpty, !keepAlive else { return }
         let bg = activeSession
         for (id, t) in fgTasks {
             migrating.insert(id)
@@ -332,6 +412,7 @@ final class SyncEngine: NSObject, ObservableObject {
     func start(reason: String = "вручную") {
         guard !running else { return }
         running = true
+        requestContinued()
         lastError = nil
         sessionUploaded = 0
         sessionBytes = 0
@@ -422,6 +503,7 @@ final class SyncEngine: NSObject, ObservableObject {
             Haptics.finished()
         }
         publishProgress(force: true)
+        endContinued(success: true)
         LiveActivityManager.end(done: doneInScope, total: totalInScope, uploaded: sessionUploaded, bytes: sessionBytes)
     }
 
@@ -568,7 +650,7 @@ final class SyncEngine: NSObject, ObservableObject {
     private func pump() {
         guard running else { return }
         let limit = max(1, min(6, settings.maxConcurrent))
-        let active = UIApplication.shared.applicationState == .active
+        let active = appActiveOrKept
         // В фоне готовим файлы по 2 за раз и отдаём системе пачкой (до 40 в очереди iOS).
         func canStart() -> Bool {
             active ? (inflightKeys.count + exporting) < limit : (exporting < 2 && inflightKeys.count < 40)
@@ -608,7 +690,7 @@ final class SyncEngine: NSObject, ObservableObject {
                                     role: r.key.split(separator: "#").last.flatMap { ResourceRole(rawValue: String($0)) } ?? .photo))
             return
         }
-        let useFg = UIApplication.shared.applicationState == .active
+        let useFg = appActiveOrKept
         var req = r.request
         req.allowsCellularAccess = !settings.wifiOnly   // старые задачи могли помнить «только Wi-Fi»
         let task = (useFg ? fgSession : activeSession).uploadTask(with: req, fromFile: r.tmp)
@@ -651,7 +733,7 @@ final class SyncEngine: NSObject, ObservableObject {
     fileprivate func onNetworkChange(kind: String) {
         defer { lastNetKind = kind }
         guard !lastNetKind.isEmpty, kind != lastNetKind, running,
-              UIApplication.shared.applicationState == .active, !fgTasks.isEmpty else { return }
+              appActiveOrKept, !fgTasks.isEmpty else { return }
         lastNetChange = Date()
         log.add("Сеть сменилась (\(lastNetKind) → \(kind)), перезапускаю передачи: \(fgTasks.count)", .warn)
         for t in fgTasks.values { t.task.cancel() }
@@ -892,6 +974,7 @@ final class SyncEngine: NSObject, ObservableObject {
             if resp?.status != "duplicate" { sendThumb(forKey: meta.key) }
             landed += 1
             lastLandedName = meta.name
+            continuedProgress()
             Haptics.landed()
             if UIApplication.shared.applicationState != .active {
                 // выгрузки в фоне копим для утреннего отчёта

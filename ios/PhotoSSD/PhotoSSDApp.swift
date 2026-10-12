@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
                 Task { @MainActor in SyncEngine.shared.handleBackgroundTask(task) }
             }
         }
+        SyncEngine.registerContinued()
         Task { @MainActor in _ = SyncEngine.shared }
         return true
     }

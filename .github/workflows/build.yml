@@ -34,6 +34,13 @@ jobs:
           curl -fsSL -o ios/Shared/Fonts/Inter.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
           curl -fsSL -o ios/Shared/Fonts/JetBrainsMono.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
           ls -la ios/Shared/Fonts
+      - name: Select newest Xcode
+        run: |
+          ls -d /Applications/Xcode*.app | sort -V
+          NEW=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | grep -v beta | sort -V | tail -1)
+          [ -z "$NEW" ] && NEW=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$NEW" ]; then sudo xcode-select -s "$NEW"; fi
+          xcodebuild -version; xcrun swift --version | head -1
       - name: Generate Xcode project
         run: |
           brew install xcodegen
