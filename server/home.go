@@ -52,7 +52,7 @@ func loadTuya(confPath string) *tuyaClient {
 	vals := map[string]string{}
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		line := strings.TrimSpace(strings.TrimPrefix(sc.Text(), "﻿"))
+		line := strings.TrimSpace(strings.TrimPrefix(sc.Text(), string([]byte{0xEF, 0xBB, 0xBF})))
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
