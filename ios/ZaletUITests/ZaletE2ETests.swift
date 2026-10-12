@@ -55,14 +55,17 @@ final class ZaletE2ETests: XCTestCase {
         let app = makeApp()
         app.launch()
         app.tap() // даёт сработать обработчику системных окон
+        // В симуляторе кроме наших фото есть стандартные снимки Apple — ждём, пока число перестанет расти.
         let deadline = Date().addingTimeInterval(300)
-        var files = 0
+        var files = 0, stableSince = Date()
         while Date() < deadline {
-            files = serverFiles()
-            if files >= expected { break }
-            sleep(3)
+            let now = serverFiles()
+            if now != files { files = now; stableSince = Date() }
+            if files >= expected && Date().timeIntervalSince(stableSince) > 12 { break }
+            sleep(2)
         }
-        XCTAssertEqual(files, expected, "на сервер дошло \(files) из \(expected)")
+        XCTAssertGreaterThanOrEqual(files, expected, "на сервер дошло \(files), а наших тестовых фото \(expected)")
+        let total = files
 
         let finished = app.staticTexts.containing(NSPredicate(format: "label CONTAINS[c] %@", "ВСЁ ВЫГРУЖЕНО")).firstMatch
         XCTAssertTrue(finished.waitForExistence(timeout: 60), "приложение не показало «Всё выгружено»")
@@ -76,13 +79,13 @@ final class ZaletE2ETests: XCTestCase {
         let app2 = makeApp()
         app2.launch()
         sleep(25)
-        XCTAssertEqual(serverFiles(), expected, "после перезапуска появились повторы")
-        XCTAssertEqual(indexCount(), expected, "журнал сервера разросся — повторная выгрузка")
+        XCTAssertEqual(serverFiles(), total, "после перезапуска появились повторы")
+        XCTAssertEqual(indexCount(), total, "журнал сервера разросся — повторная выгрузка")
 
         // 3. Вкладка SSD показывает выгруженное.
         app2.tabBars.buttons["SSD"].tap()
-        let count = app2.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "\(expected) ")).firstMatch
-        XCTAssertTrue(count.waitForExistence(timeout: 30), "во вкладке SSD нет «\(expected) файлов»")
+        let count = app2.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "\(total) ")).firstMatch
+        XCTAssertTrue(count.waitForExistence(timeout: 30), "во вкладке SSD нет «\(total) файлов»")
         let shot = XCTAttachment(screenshot: app2.screenshot())
         shot.name = "вкладка SSD"
         shot.lifetime = .keepAlways

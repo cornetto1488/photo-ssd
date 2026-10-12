@@ -437,6 +437,24 @@ struct TransferSettings: View {
             } header: { SectionHeader(text: "Автоматически") } footer: {
                 Hint(text: "Начатые передачи продолжаются, даже если свернуть приложение. Новые снимки iOS даёт выгружать в фоне, когда сочтёт нужным — обычно ночью на зарядке и Wi-Fi.")
             }
+
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Снял — и фото само улетело на SSD, не открывая ZALET:").font(F.sans(14, 600)).foregroundColor(Theme.ink)
+                    Group {
+                        Text("1. Откройте «Команды» → «Автоматизация» → «+».")
+                        Text("2. Выберите «Приложение» → «Камера» → «Закрыто».")
+                        Text("3. Отметьте «Выполнять сразу».")
+                        Text("4. Действие: «ZALET» → «Выгрузить новые фото».")
+                    }
+                    .font(F.sans(13)).foregroundColor(Theme.muted)
+                    Text("Так же можно повесить на «Зарядное устройство подключено» или на подключение к домашнему Wi-Fi.")
+                        .font(F.sans(12)).foregroundColor(Theme.dim)
+                }
+                .padding(.vertical, 6).row()
+            } header: { SectionHeader(text: "Сразу после съёмки") } footer: {
+                Hint(text: "Команда работает в фоне около 30 секунд: за это время ZALET готовит новые снимки и отдаёт их iOS, а iOS досылает их сама. Ещё можно сказать Siri: «Залёт в ZALET».")
+            }
         }
         .navigationTitle("Передача и фон")
         .navigationBarTitleDisplayMode(.inline)
