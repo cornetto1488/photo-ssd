@@ -156,7 +156,7 @@ func (tl *tuyaLocal) discover() {
 	names := map[string]string{}
 	var fm sync.Mutex
 	for _, cd := range devs {
-		if cd.Sub || cd.Key == "" {
+		if (cd.Sub && !isGateway(cd)) || cd.Key == "" {
 			continue
 		}
 		wg.Add(1)
@@ -184,13 +184,13 @@ func (tl *tuyaLocal) discover() {
 	// под-устройства (Bluetooth-лампы) — через найденный шлюз
 	var gw *localDev
 	for _, cd := range devs {
-		if d := found[cd.ID]; d != nil && (cd.Category == "wg2" || cd.Category == "wfcon" || cd.Category == "gw") {
+		if d := found[cd.ID]; d != nil && isGateway(cd) {
 			gw = d
 		}
 	}
 	if gw != nil {
 		for _, cd := range devs {
-			if cd.Sub && cd.NodeID != "" {
+			if cd.Sub && cd.NodeID != "" && !isGateway(cd) {
 				found[cd.ID] = &localDev{ID: cd.ID, Key: gw.Key, IP: gw.IP, Version: gw.Version, GwID: gw.ID, NodeID: cd.NodeID}
 			}
 		}
@@ -200,6 +200,10 @@ func (tl *tuyaLocal) discover() {
 	tl.ipName = names
 	tl.mu.Unlock()
 	log.Printf("tuya local: найдено %d из %d", len(found), len(devs))
+}
+
+func isGateway(cd cloudDev) bool {
+	return cd.Category == "wg2" || cd.Category == "wfcon" || cd.Category == "gw" || cd.Category == "wg"
 }
 
 func dialOKTimeout(addr string, d time.Duration) bool {
@@ -310,7 +314,7 @@ func runProbeCLI(confPath string) {
 		}
 		fmt.Println("порт 6668 открыт:", ip)
 		for _, cd := range devs {
-			if cd.Sub {
+			if cd.Sub && !isGateway(cd) {
 				continue
 			}
 			for _, v := range []string{"3.3", "3.4", "3.5"} {
