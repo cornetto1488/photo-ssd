@@ -162,7 +162,7 @@ struct HomeView: View {
             .padding(.top, 14)
 
             if let start = engine.sessionStart {
-                Text("запущено \(start.formatted(date: .omitted, time: .shortened)) · можно свернуть приложение, передача продолжится")
+                Text("запущено \(start.formatted(date: .omitted, time: .shortened)) · открытым — быстрее всего; в свёрнутом виде iOS выгружает порциями, ночью на зарядке — больше всего")
                     .font(F.mono(10)).foregroundColor(Theme.dim).padding(.top, 12)
             }
         }

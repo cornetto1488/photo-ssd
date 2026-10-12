@@ -217,6 +217,38 @@ final class SyncEngine: NSObject, ObservableObject {
         files[key] = FileProgress(name: name, stage: stage, fraction: fraction)
     }
 
+    /// Пока приложение свёрнуто, iOS даёт ~30 секунд: готовим пачку файлов и отдаём её на фоновую передачу.
+    /// Когда пачка уйдёт, iOS разбудит приложение — и мы приготовим следующую.
+    func backgroundRefill(reason: String) {
+        guard settings.onboarded, settings.backgroundEnabled || settings.smartNight || running else { return }
+        var bgID: UIBackgroundTaskIdentifier = .invalid
+        bgID = UIApplication.shared.beginBackgroundTask(withName: "zalet.refill") {
+            Task { @MainActor in
+                SyncEngine.shared.store.saveNow()
+                UIApplication.shared.endBackgroundTask(bgID)
+            }
+        }
+        refillActive = true
+        if running { pump() } else { start(reason: reason) }
+        Task {
+            // Используем почти всё выделенное время, потом корректно завершаемся.
+            for _ in 0..<26 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if UIApplication.shared.applicationState == .active { break }
+                if !self.running && self.exporting == 0 { break }
+                if UIApplication.shared.backgroundTimeRemaining < 4 { break }
+            }
+            self.store.saveNow()
+            self.refillActive = false
+            // Теперь можно сообщить iOS, что события фоновой сессии обработаны.
+            let handlers = self.backgroundCompletionHandlers
+            self.backgroundCompletionHandlers.removeAll()
+            handlers.values.forEach { $0() }
+            if bgID != .invalid { UIApplication.shared.endBackgroundTask(bgID) }
+        }
+    }
+    private var refillActive = false
+
     /// При сворачивании переносим незавершённые быстрые передачи в фоновую сессию.
     func migrateToBackground() {
         guard !fgTasks.isEmpty else { return }
@@ -520,7 +552,12 @@ final class SyncEngine: NSObject, ObservableObject {
     private func pump() {
         guard running else { return }
         let limit = max(1, min(6, settings.maxConcurrent))
-        while running && (inflightKeys.count + exporting) < limit && !queue.isEmpty {
+        let active = UIApplication.shared.applicationState == .active
+        // В фоне готовим файлы по 2 за раз и отдаём системе пачкой (до 40 в очереди iOS).
+        func canStart() -> Bool {
+            active ? (inflightKeys.count + exporting) < limit : (exporting < 2 && inflightKeys.count < 40)
+        }
+        while running && canStart() && !queue.isEmpty {
             let ref = queue.removeFirst()
             exporting += 1
             preparingCount = exporting
@@ -912,7 +949,8 @@ extension SyncEngine: URLSessionDataDelegate {
         let id = session.configuration.identifier ?? ""
         Task { @MainActor in
             self.store.saveNow()
-            self.backgroundCompletionHandlers.removeValue(forKey: id)?()
+            // Если сейчас готовится следующая пачка — сигнал отдадим по её окончании.
+            if !self.refillActive { self.backgroundCompletionHandlers.removeValue(forKey: id)?() }
         }
     }
 }

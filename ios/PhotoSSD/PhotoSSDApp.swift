@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             let engine = SyncEngine.shared
             engine.backgroundCompletionHandlers[identifier] = completionHandler
             _ = engine.session(id: identifier)
+            // Пачка ушла — готовим следующую, пока iOS дала время.
+            engine.backgroundRefill(reason: "фон: следующая пачка")
         }
     }
 }
@@ -59,6 +61,7 @@ struct PhotoSSDApp: App {
                 engine.migrateToBackground()
                 store.saveNow()
                 engine.scheduleBackground()
+                engine.backgroundRefill(reason: "свёрнуто")
             default: break
             }
         }
