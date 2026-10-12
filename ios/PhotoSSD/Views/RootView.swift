@@ -45,6 +45,7 @@ struct HomeView: View {
                     header
                     hero
                     actions
+                    if engine.state == .syncing { syncDetails }
                     if !engine.currentNames.isEmpty && isBusy { currentPanel }
                     statsGrid
                     serverPanel
@@ -64,7 +65,7 @@ struct HomeView: View {
         HStack {
             HStack(spacing: 10) {
                 RoundedRectangle(cornerRadius: 8).fill(Theme.accGradient).frame(width: 30, height: 30)
-                    .overlay(Image(systemName: "arrow.down.to.line").font(.system(size: 14, weight: .black)).foregroundColor(Theme.bg))
+                    .overlay(Image(systemName: "paperplane.fill").font(.system(size: 14, weight: .black)).foregroundColor(Theme.bg))
                 ZaletWordmark(size: 20)
             }
             Spacer()
@@ -107,6 +108,7 @@ struct HomeView: View {
             ZStack {
                 Theme.panel
                 RadialGradient(colors: [Theme.acc.opacity(0.28), .clear], center: .bottomTrailing, startRadius: 10, endRadius: 320)
+                if engine.state == .syncing && !engine.waitingWifi { PaperPlaneFlight() }
             }
         )
         .overlay(RoundedRectangle(cornerRadius: 22).stroke(Theme.line, lineWidth: 1))
@@ -125,9 +127,50 @@ struct HomeView: View {
         }
     }
 
+    private var phaseText: (String, String) {
+        if engine.waitingWifi { return ("wifi.slash", "Ждёт Wi-Fi — включено «Только по Wi-Fi»") }
+        if !engine.serverOnline { return ("wifi.exclamationmark", "Нет связи с роутером") }
+        if !engine.inflightKeys.isEmpty { return ("paperplane.fill", "Отправляю на SSD · \(engine.inflightKeys.count) в пути") }
+        if engine.preparingCount > 0 { return ("icloud.and.arrow.down", "Готовлю файлы (может качаться из iCloud)") }
+        return ("hourglass", "Подготовка")
+    }
+
+    private func etaText(_ t: TimeInterval) -> String {
+        let m = Int(t / 60)
+        if m < 1 { return "меньше минуты" }
+        if m < 60 { return "≈ \(m) мин" }
+        let h = m / 60, rest = m % 60
+        if h < 48 { return "≈ \(h) ч \(rest) мин" }
+        return "≈ \(h / 24) дн \(h % 24) ч"
+    }
+
+    private var syncDetails: some View {
+        Panel {
+            MonoLabel(text: "Как идёт выгрузка", number: "02")
+            HStack(spacing: 10) {
+                Image(systemName: phaseText.0).foregroundColor(Theme.acc).frame(width: 22)
+                Text(phaseText.1).font(F.sans(14, 500)).foregroundColor(Theme.ink)
+            }
+            .padding(.top, 12)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 14) {
+                DetailCell(label: "Выгружено сейчас", value: "\(engine.sessionUploaded) · \(formatBytes(engine.sessionBytes))")
+                DetailCell(label: "Осталось", value: "\(engine.remaining)")
+                DetailCell(label: "Скорость", value: engine.speed > 0 ? "\(formatBytes(Int64(engine.speed)))/с" : "—")
+                DetailCell(label: "До конца", value: engine.eta.map(etaText) ?? "считаю…")
+            }
+            .padding(.top, 14)
+
+            if let start = engine.sessionStart {
+                Text("запущено \(start.formatted(date: .omitted, time: .shortened)) · можно свернуть приложение, передача продолжится")
+                    .font(F.mono(10)).foregroundColor(Theme.dim).padding(.top, 12)
+            }
+        }
+    }
+
     private var currentPanel: some View {
         Panel {
-            MonoLabel(text: "Сейчас отправляется", number: "02")
+            MonoLabel(text: "Последние файлы", number: "03")
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(engine.currentNames.prefix(4), id: \.self) { name in
                     HStack(spacing: 10) {
@@ -182,6 +225,60 @@ struct HomeView: View {
             MonoLabel(text: "Последняя ошибка", color: Theme.danger)
             Text(err).font(F.sans(14)).foregroundColor(Theme.ink).padding(.top, 8)
         }
+    }
+}
+
+struct DetailCell: View {
+    let label: String, value: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(label.uppercased()).font(F.mono(9, 500)).tracking(1).foregroundColor(Theme.muted)
+            Text(value).font(F.display(16, 700)).foregroundColor(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
+        }
+    }
+}
+
+// MARK: - Самолётик: летает по карточке, пока идёт выгрузка, и оставляет пунктирный шлейф.
+
+struct PaperPlaneFlight: View {
+    private let period: Double = 4.2
+
+    var body: some View {
+        TimelineView(.animation) { tl in
+            GeometryReader { g in
+                let t = tl.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: period) / period
+                Canvas { ctx, size in
+                    // шлейф — несколько точек позади самолётика
+                    for i in 1...14 {
+                        let tt = t - Double(i) * 0.018
+                        guard tt > 0 else { continue }
+                        let p = point(tt, size)
+                        let r = CGFloat(3.2 - Double(i) * 0.18)
+                        ctx.fill(Path(ellipseIn: CGRect(x: p.x - r / 2, y: p.y - r / 2, width: r, height: r)),
+                                 with: .color(Theme.acc.opacity(0.55 - Double(i) * 0.035)))
+                    }
+                }
+                let p = point(t, g.size)
+                let next = point(min(1, t + 0.01), g.size)
+                let angle = atan2(next.y - p.y, next.x - p.x)
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundStyle(Theme.accGradient)
+                    .shadow(color: Theme.acc.opacity(0.7), radius: 8)
+                    .rotationEffect(.radians(Double(angle) + .pi / 4))
+                    .position(p)
+                    .opacity(t < 0.06 ? t / 0.06 : (t > 0.92 ? (1 - t) / 0.08 : 1))
+            }
+        }
+        .allowsHitTesting(false)
+    }
+
+    /// Траектория: слева снизу вправо вверх, с волной.
+    private func point(_ t: Double, _ size: CGSize) -> CGPoint {
+        let x = -20 + (size.width + 40) * t
+        let base = size.height * (0.78 - 0.55 * t)
+        let wave = sin(t * .pi * 3) * size.height * 0.07
+        return CGPoint(x: x, y: base + wave)
     }
 }
 

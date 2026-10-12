@@ -196,7 +196,7 @@ final class AppSettings: ObservableObject {
         typeNameScreenshot = s("typeNameScreenshot", "Скриншоты")
         noAlbumName = s("noAlbumName", "Без альбома")
 
-        wifiOnly = b("wifiOnly", true)
+        wifiOnly = b("wifiOnly", false)
         backgroundEnabled = b("backgroundEnabled", true)
         backgroundOnlyCharging = b("backgroundOnlyCharging", false)
         autoStart = b("autoStart", true)

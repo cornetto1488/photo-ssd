@@ -74,6 +74,20 @@ final class SyncEngine: NSObject, ObservableObject {
     @Published private(set) var inflightKeys: Set<String> = []
     @Published private(set) var lastError: String?
     @Published fileprivate(set) var scanProgress: Double = 0
+    @Published private(set) var preparingCount = 0      // сколько файлов сейчас готовится (экспорт/iCloud)
+    @Published private(set) var sessionStart: Date?
+    @Published private(set) var sessionPending = 0      // сколько было в очереди в начале запуска
+
+    /// Примерное время до конца, по средней скорости за этот запуск.
+    var eta: TimeInterval? {
+        guard let start = sessionStart, sessionUploaded >= 3 else { return nil }
+        let elapsed = Date().timeIntervalSince(start)
+        let perFile = elapsed / Double(sessionUploaded)
+        let left = max(0, totalInScope - doneInScope)
+        return perFile * Double(left)
+    }
+
+    var remaining: Int { max(0, totalInScope - doneInScope) }
     @Published private(set) var waitingWifi = false
     @Published private(set) var landed = 0             // счётчик для анимации «залёта»
     @Published private(set) var lastLandedName = ""
@@ -252,6 +266,8 @@ final class SyncEngine: NSObject, ObservableObject {
             return
         }
         state = .syncing
+        sessionStart = Date()
+        sessionPending = pending.count
         if UIApplication.shared.applicationState == .active {
             LiveActivityManager.start(done: doneInScope, total: totalInScope)
         }
@@ -418,6 +434,7 @@ final class SyncEngine: NSObject, ObservableObject {
         while running && (inflightKeys.count + exporting) < limit && !queue.isEmpty {
             let ref = queue.removeFirst()
             exporting += 1
+            preparingCount = exporting
             Task { await self.prepareAndUpload(ref) }
         }
         if queue.isEmpty && inflightKeys.isEmpty && exporting == 0 && state == .syncing {
@@ -443,7 +460,7 @@ final class SyncEngine: NSObject, ObservableObject {
     }
 
     private func prepareAndUpload(_ ref: PendingRef) async {
-        defer { exporting -= 1; queuedKeys.remove(ref.key); pump() }
+        defer { exporting -= 1; preparingCount = exporting; queuedKeys.remove(ref.key); pump() }
         guard running else { return }
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [ref.assetID], options: nil).firstObject else {
             store.markFailed(ref.key, "Снимок удалён из медиатеки")
