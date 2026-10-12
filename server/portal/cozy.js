@@ -184,7 +184,8 @@ function renderWeather() {
     const ww = WEATHER[d.weather_code[i + 1]] || ["", "cloud"];
     return `<div><span class="mono-label">${DN[new Date(t).getDay()]}</span><i>${WICON[ww[1]]}</i><b>${Math.round(d.temperature_2m_max[i + 1])}°</b><span>${Math.round(d.temperature_2m_min[i + 1])}°</span></div>`;
   }).join("");
-  win.setWeather(w[1], !!c.is_day);
+  const hr = new Date().getHours();
+  win.setWeather(w[1], weather.source === "wttr.in" ? hr >= 7 && hr < 19 : !!c.is_day);
 }
 const win = (() => {
   const cv = $("#windowCanvas"), ctx = cv.getContext("2d");
