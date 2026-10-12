@@ -296,6 +296,31 @@ func runProbeCLI(confPath string) {
 	p := &homePortal{tuya: t}
 	tl := newTuyaLocal(p)
 	p.local = tl
+	// отладка: какие IP открыты и что отвечают устройства
+	devs, err := tl.cloudList()
+	fmt.Println("облако:", len(devs), err)
+	ips := candidateIPs()
+	fmt.Println("кандидаты:", ips)
+	for _, ip := range ips {
+		if !dialOKTimeout(ip+":6668", 800*time.Millisecond) {
+			continue
+		}
+		fmt.Println("порт 6668 открыт:", ip)
+		for _, cd := range devs {
+			if cd.Sub {
+				continue
+			}
+			for _, v := range []string{"3.3", "3.4", "3.5"} {
+				d := &localDev{ID: cd.ID, Key: []byte(cd.Key), IP: ip, Version: v}
+				st, err := localStatus(d)
+				if err == nil {
+					fmt.Printf("  ✓ %s (%s) v%s → %v\n", cd.Name, ip, v, st)
+				} else if os.Getenv("VERBOSE") != "" {
+					fmt.Printf("  · %s keylen=%d v%s: %v\n", cd.Name, len(cd.Key), v, err)
+				}
+			}
+		}
+	}
 	tl.discover()
 	for _, s := range tl.summary() {
 		fmt.Printf("%v\n", s)

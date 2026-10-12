@@ -170,13 +170,16 @@ type homePortal struct {
 	roomsAt time.Time
 	pin     *pinAuth
 	local   *tuyaLocal
+	tokenFile string
+	pw        *pwVault
 }
 
 func netDial(addr string, d time.Duration) (net.Conn, error) { return net.DialTimeout("tcp", addr, d) }
 
-func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile string) *homePortal {
+func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile, tokenFile string) *homePortal {
 	p := &homePortal{s: s, tuya: loadTuya(tuyaConf), pcIP: pcIP, pcMAC: pcMAC, rooms: map[string]string{},
-		pin: newPinAuth(pinFile, s.meta("sessions.json"))}
+		pin: newPinAuth(pinFile, s.meta("sessions.json")), tokenFile: tokenFile,
+		pw: &pwVault{file: "/etc/zalet-vault.bin", sessions: map[string]*pwSession{}}}
 	s.sessionCheck = p.pin.sessionOK
 	if p.tuya != nil {
 		p.local = newTuyaLocal(p)
@@ -630,6 +633,8 @@ type client struct {
 	IP     string `json:"ip"`
 	MAC    string `json:"mac"`
 	Online bool   `json:"online"`
+	Vendor string `json:"vendor"`
+	Source string `json:"source"` // custom, dhcp, tuya, vendor
 }
 
 func (p *homePortal) handleClients(w http.ResponseWriter, r *http.Request) {
@@ -652,16 +657,28 @@ func (p *homePortal) handleClients(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	list := []client{}
+	custom := p.customNames()
 	for _, l := range strings.Split(readFile("/tmp/dhcp.leases"), "\n") {
 		f := strings.Fields(l)
 		if len(f) < 4 {
 			continue
 		}
-		name := f[3]
-		if name == "*" {
-			name = ""
+		mac := strings.ToUpper(f[1])
+		c := client{IP: f[2], MAC: mac, Online: reach[f[2]], Vendor: vendorOf(mac)}
+		switch {
+		case custom[mac] != "":
+			c.Name, c.Source = custom[mac], "custom"
+		case f[3] != "*" && f[3] != "":
+			c.Name, c.Source = f[3], "dhcp"
+		case p.local != nil && p.local.nameByIP(f[2]) != "":
+			c.Name, c.Source = p.local.nameByIP(f[2]), "tuya"
+		case c.Vendor != "":
+			c.Name, c.Source = c.Vendor, "vendor"
 		}
-		list = append(list, client{Name: name, IP: f[2], MAC: strings.ToUpper(f[1]), Online: reach[f[2]]})
+		if f[2] == p.pcIP && c.Source != "custom" {
+			c.Name, c.Source = "Компьютер", "tuya"
+		}
+		list = append(list, c)
 	}
 	sort.Slice(list, func(i, j int) bool {
 		if list[i].Online != list[j].Online {
@@ -1075,6 +1092,12 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/service": p.handleService,
 		"/api/home/info":    p.handleInfo,
 		"/api/home/sites":   p.handleSites,
+		"/api/home/ssh":          p.handleSSHKeys,
+		"/api/home/ssh/generate": p.handleSSHGen,
+		"/api/home/vault":        p.handleVault,
+		"/api/home/token":        p.handleToken,
+		"/api/home/client-name":  p.handleClientName,
+		"/api/home/passwords":    p.pw.handle,
 	}
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))

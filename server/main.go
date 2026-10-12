@@ -135,7 +135,7 @@ func main() {
 	}
 	s.mux = mux
 	if *portalListen != "" {
-		newPortal(s, *tuyaConf, *portalProxy, *pcIP, *pcMAC, *pinFile).listen(*portalListen)
+		newPortal(s, *tuyaConf, *portalProxy, *pcIP, *pcMAC, *pinFile, *tokenFile).listen(*portalListen)
 	}
 	srv := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}
 	log.Printf("photossd %s: %s -> %s (%d записей)", version, *listen, s.root, len(s.byID))
