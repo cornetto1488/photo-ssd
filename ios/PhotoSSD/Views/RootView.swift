@@ -46,7 +46,7 @@ struct HomeView: View {
                     hero
                     actions
                     if engine.state == .syncing { syncDetails }
-                    if !engine.currentNames.isEmpty && isBusy { currentPanel }
+                    if !engine.files.isEmpty && isBusy { filesPanel }
                     statsGrid
                     serverPanel
                     if let err = engine.lastError, !isBusy { errorPanel(err) }
@@ -165,6 +165,28 @@ struct HomeView: View {
                 Text("запущено \(start.formatted(date: .omitted, time: .shortened)) · можно свернуть приложение, передача продолжится")
                     .font(F.mono(10)).foregroundColor(Theme.dim).padding(.top, 12)
             }
+        }
+    }
+
+    private var filesPanel: some View {
+        Panel {
+            MonoLabel(text: "Сейчас в работе", number: "03")
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(engine.files.keys.sorted(), id: \.self) { k in
+                    let f = engine.files[k] ?? SyncEngine.FileProgress(name: "", stage: "", fraction: 0)
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Image(systemName: f.stage == "iCloud" ? "icloud.and.arrow.down" : (f.stage == "отправка" ? "paperplane.fill" : "gearshape"))
+                                .font(.system(size: 11, weight: .bold)).foregroundColor(Theme.acc).frame(width: 16)
+                            Text(f.name).font(F.mono(11)).foregroundColor(Theme.ink).lineLimit(1).truncationMode(.middle)
+                            Spacer()
+                            Text(f.fraction > 0 ? "\(f.stage) \(Int(f.fraction * 100))%" : f.stage)
+                                .font(F.mono(10, 600)).foregroundColor(Theme.acc2)
+                        }
+                        ProgressBar(value: f.fraction).frame(height: 3)
+                    }
+                }
+            }.padding(.top, 12)
         }
     }
 

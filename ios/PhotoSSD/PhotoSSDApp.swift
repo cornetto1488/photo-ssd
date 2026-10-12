@@ -56,6 +56,7 @@ struct PhotoSSDApp: App {
                     if settings.onboarded && settings.autoStart { engine.start(reason: "открытие") }
                 }
             case .background:
+                engine.migrateToBackground()
                 store.saveNow()
                 engine.scheduleBackground()
             default: break

@@ -6,6 +6,22 @@ import UniformTypeIdentifiers
 import BackgroundTasks
 import Network
 
+struct ExportStalled: LocalizedError {
+    var errorDescription: String? { "файл слишком долго качается из iCloud" }
+}
+
+/// Следит за экспортом из медиатеки: последний момент активности и однократное завершение.
+final class ExportGuard: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last = Date()
+    private var fired = false
+    func touch() { lock.lock(); last = Date(); lock.unlock() }
+    var idleSeconds: TimeInterval { lock.lock(); defer { lock.unlock() }; return Date().timeIntervalSince(last) }
+    var isFired: Bool { lock.lock(); defer { lock.unlock() }; return fired }
+    /// true только при первом вызове.
+    func fire() -> Bool { lock.lock(); defer { lock.unlock() }; if fired { return false }; fired = true; return true }
+}
+
 /// Что нужно выгрузить: конкретная часть конкретного снимка.
 struct PendingRef: Hashable, Sendable {
     let key: String
@@ -107,7 +123,7 @@ final class SyncEngine: NSObject, ObservableObject {
     private var queue: [PendingRef] = []
     private var running = false
     private var exporting = 0
-    private var responseData: [Int: Data] = [:]
+    private var responseData: [String: Data] = [:]
     private var bytesWindow: [(Date, Int64)] = []
     private var sessions: [String: URLSession] = [:]
     var backgroundCompletionHandlers: [String: () -> Void] = [:]
@@ -165,6 +181,75 @@ final class SyncEngine: NSObject, ObservableObject {
 
     private var activeSession: URLSession {
         session(id: settings.wifiOnly ? Self.sessionWifi : Self.sessionAny)
+    }
+
+    /// Обычная (быстрая) сессия — пока приложение открыто. iOS не притормаживает её, в отличие от фоновой.
+    private lazy var fgSession: URLSession = {
+        let c = URLSessionConfiguration.default
+        c.timeoutIntervalForRequest = 120
+        c.timeoutIntervalForResource = 60 * 60 * 6
+        c.waitsForConnectivity = true
+        c.httpMaximumConnectionsPerHost = 6
+        return URLSession(configuration: c, delegate: self, delegateQueue: nil)
+    }()
+
+    struct FgTask {
+        let task: URLSessionUploadTask
+        let request: URLRequest
+        let tmp: URL
+        let key: String
+    }
+    private var fgTasks: [Int: FgTask] = [:]
+    private var migrating: Set<Int> = []
+    private var lastProgressAt: [Int: Date] = [:]
+    private var retries: [String: Int] = [:]
+    private var watchdog: Task<Void, Never>?
+
+    /// Прогресс по каждому файлу для экрана.
+    struct FileProgress: Equatable {
+        var name: String
+        var stage: String     // "iCloud", "подготовка", "отправка"
+        var fraction: Double
+    }
+    @Published private(set) var files: [String: FileProgress] = [:]
+
+    private func setFile(_ key: String, _ name: String, _ stage: String, _ fraction: Double) {
+        files[key] = FileProgress(name: name, stage: stage, fraction: fraction)
+    }
+
+    /// При сворачивании переносим незавершённые быстрые передачи в фоновую сессию.
+    func migrateToBackground() {
+        guard !fgTasks.isEmpty else { return }
+        let bg = activeSession
+        for (id, t) in fgTasks {
+            migrating.insert(id)
+            t.task.cancel()
+            let nt = bg.uploadTask(with: t.request, fromFile: t.tmp)
+            nt.taskDescription = t.task.taskDescription
+            nt.resume()
+        }
+        log.add("Передачи перенесены в фон: \(fgTasks.count)")
+        fgTasks.removeAll()
+        lastProgressAt.removeAll()
+    }
+
+    /// Перезапускает «застывшие» передачи: нет движения 90 секунд — отменяем и ставим в очередь заново.
+    private func startWatchdog() {
+        watchdog?.cancel()
+        watchdog = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 15_000_000_000)
+                guard let self, self.running else { continue }
+                let now = Date()
+                for (id, t) in self.fgTasks {
+                    let last = self.lastProgressAt[id] ?? now
+                    if now.timeIntervalSince(last) > 90 {
+                        self.log.add("Передача застыла, перезапускаю: \(self.files[t.key]?.name ?? "файл")", .warn)
+                        t.task.cancel() // handleComplete вернёт файл в очередь
+                    }
+                }
+            }
+        }
     }
 
     private func restoreInflight() {
@@ -267,6 +352,8 @@ final class SyncEngine: NSObject, ObservableObject {
         }
         state = .syncing
         sessionStart = Date()
+        retries.removeAll()
+        startWatchdog()
         sessionPending = pending.count
         if UIApplication.shared.applicationState == .active {
             LiveActivityManager.start(done: doneInScope, total: totalInScope)
@@ -278,6 +365,8 @@ final class SyncEngine: NSObject, ObservableObject {
     private func finish() {
         running = false
         state = .finished
+        watchdog?.cancel()
+        files.removeAll()
         store.saveNow()
         flushAlbum()
         if sessionUploaded > 0 {
@@ -488,11 +577,21 @@ final class SyncEngine: NSObject, ObservableObject {
 
         // 1. Экспорт во временный файл (только этот один файл, не вся медиатека).
         let ext = (res.originalFilename as NSString).pathExtension
+        let shownName = (relPath as NSString).lastPathComponent
         var tmp = tmpDir.appendingPathComponent(UUID().uuidString + (ext.isEmpty ? "" : ".\(ext)"))
+        setFile(ref.key, shownName, "подготовка", 0)
         do {
-            try await Self.export(res, to: tmp, network: settings.allowICloudDownload)
+            let key = ref.key
+            try await Self.export(res, to: tmp, network: settings.allowICloudDownload) { p in
+                Task { @MainActor in
+                    let e = SyncEngine.shared
+                    if e.files[key] != nil { e.setFile(key, shownName, "iCloud", p) }
+                }
+            }
         } catch {
             try? FileManager.default.removeItem(at: tmp)
+            files[ref.key] = nil
+            if error is ExportStalled, requeue(ref, reason: "долго качается из iCloud, попробую позже") { return }
             store.markFailed(ref.key, "Экспорт: \(error.localizedDescription)")
             log.add("Не удалось подготовить \(res.originalFilename): \(error.localizedDescription)", .warn)
             return
@@ -511,29 +610,74 @@ final class SyncEngine: NSObject, ObservableObject {
         let size = (try? FileManager.default.attributesOfItem(atPath: tmp.path)[.size] as? NSNumber)?.int64Value ?? 0
         guard running else { try? FileManager.default.removeItem(at: tmp); return }
 
-        // 3. Фоновая передача.
+        // 3. Передача: открыто приложение — быстрая сессия, свёрнуто — фоновая.
         do {
             let kindParam = (ref.role == .liveVideo || ref.role == .liveVideoEdited) ? "livevideo" : info.kind.rawValue
-            let req = try ServerAPI.uploadRequest(path: relPath, id: ref.key, size: size, mtime: info.date,
+            var req = try ServerAPI.uploadRequest(path: relPath, id: ref.key, size: size, mtime: info.date,
                                                   kind: kindParam, album: info.album)
-            let task = activeSession.uploadTask(with: req, fromFile: tmp)
-            let meta = TaskMeta(key: ref.key, path: relPath, tmp: tmp.lastPathComponent, size: size, name: (relPath as NSString).lastPathComponent)
+            req.allowsCellularAccess = !settings.wifiOnly
+            let useFg = UIApplication.shared.applicationState == .active
+            let task = (useFg ? fgSession : activeSession).uploadTask(with: req, fromFile: tmp)
+            let meta = TaskMeta(key: ref.key, path: relPath, tmp: tmp.lastPathComponent, size: size, name: shownName)
             task.taskDescription = String(data: (try? JSONEncoder().encode(meta)) ?? Data(), encoding: .utf8)
             inflightKeys.insert(ref.key)
+            if useFg {
+                fgTasks[task.taskIdentifier] = FgTask(task: task, request: req, tmp: tmp, key: ref.key)
+                lastProgressAt[task.taskIdentifier] = Date()
+            }
+            setFile(ref.key, shownName, "отправка", 0)
             task.resume()
         } catch {
             try? FileManager.default.removeItem(at: tmp)
+            files[ref.key] = nil
             store.markFailed(ref.key, error.localizedDescription)
         }
     }
 
-    nonisolated static func export(_ res: PHAssetResource, to url: URL, network: Bool) async throws {
+    /// Вернуть файл в конец очереди (не больше 3 раз). false — попытки кончились.
+    @discardableResult
+    private func requeue(_ ref: PendingRef, reason: String) -> Bool {
+        let n = (retries[ref.key] ?? 0) + 1
+        retries[ref.key] = n
+        guard running, n <= 3 else { return false }
+        queue.append(ref)
+        queuedKeys.insert(ref.key)
+        log.add("\(files[ref.key]?.name ?? "Файл"): \(reason) (попытка \(n)/3)", .warn)
+        return true
+    }
+
+    nonisolated static func export(_ res: PHAssetResource, to url: URL, network: Bool,
+                                   progress: @escaping @Sendable (Double) -> Void) async throws {
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        let fh = try FileHandle(forWritingTo: url)
+        let guardBox = ExportGuard()
         let opts = PHAssetResourceRequestOptions()
         opts.isNetworkAccessAllowed = network
+        opts.progressHandler = { p in guardBox.touch(); progress(p) }
+        let mgr = PHAssetResourceManager.default()
+
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
-            PHAssetResourceManager.default().writeData(for: res, toFile: url, options: opts) { err in
+            let id = mgr.requestData(for: res, options: opts, dataReceivedHandler: { data in
+                guardBox.touch()
+                try? fh.write(contentsOf: data)
+            }, completionHandler: { err in
+                try? fh.close()
+                guard guardBox.fire() else { return }
                 if let err { c.resume(throwing: err) } else { c.resume() }
+            })
+            // Сторож: 2 минуты без данных — отменяем, файл уйдёт в конец очереди.
+            func check() {
+                DispatchQueue.global().asyncAfter(deadline: .now() + 10) {
+                    guard !guardBox.isFired else { return }
+                    if guardBox.idleSeconds > 120 {
+                        guard guardBox.fire() else { return }
+                        mgr.cancelDataRequest(id)
+                        try? fh.close()
+                        c.resume(throwing: ExportStalled())
+                    } else { check() }
+                }
             }
+            check()
         }
     }
 
@@ -548,34 +692,55 @@ final class SyncEngine: NSObject, ObservableObject {
 
     // MARK: Результаты передачи
 
-    fileprivate func handleData(taskID: Int, data: Data) {
-        responseData[taskID, default: Data()].append(data)
+    fileprivate func handleData(key: String, data: Data) {
+        responseData[key, default: Data()].append(data)
     }
 
-    fileprivate func handleSent(_ bytes: Int64) {
+    fileprivate func handleSent(_ bytes: Int64, key: String?, taskID: Int, isFg: Bool, sent: Int64, expected: Int64) {
         let now = Date()
         bytesWindow.append((now, bytes))
         bytesWindow.removeAll { now.timeIntervalSince($0.0) > 5 }
         let sum = bytesWindow.reduce(Int64(0)) { $0 + $1.1 }
         speed = Double(sum) / 5
+        if isFg { lastProgressAt[taskID] = now }
+        if let key, var f = files[key], expected > 0 {
+            f.stage = "отправка"
+            f.fraction = Double(sent) / Double(expected)
+            files[key] = f
+        }
     }
 
-    fileprivate func handleComplete(meta: TaskMeta?, taskID: Int, status: Int, error: Error?) {
-        let data = responseData.removeValue(forKey: taskID) ?? Data()
+    fileprivate func handleComplete(meta: TaskMeta?, taskID: Int, isFg: Bool, status: Int, error: Error?) {
         guard let meta else { return }
+        // Задача перенесена в фоновую сессию — файл и учёт не трогаем.
+        if isFg && migrating.contains(taskID) {
+            migrating.remove(taskID)
+            return
+        }
+        let data = responseData.removeValue(forKey: meta.key) ?? Data()
+        if isFg { fgTasks[taskID] = nil; lastProgressAt[taskID] = nil }
         inflightKeys.remove(meta.key)
+        files[meta.key] = nil
         try? FileManager.default.removeItem(at: tmpDir.appendingPathComponent(meta.tmp))
+        let ref = PendingRef(key: meta.key, assetID: SyncStore.assetID(fromKey: meta.key),
+                             role: meta.key.split(separator: "#").last.flatMap { ResourceRole(rawValue: String($0)) } ?? .photo)
 
         if let error {
             let ns = error as NSError
             if ns.code == NSURLErrorCancelled {
-                log.add("Отменено: \(meta.name)", .warn)
+                // отменено сторожем или вручную: при идущей синхронизации — повторим
+                if !requeue(ref, reason: "передача застыла, повторяю") && running {
+                    store.markFailed(meta.key, "Передача несколько раз застывала")
+                }
+            } else if requeue(ref, reason: "ошибка сети, повторю") {
+                lastError = error.localizedDescription
             } else {
                 store.markFailed(meta.key, error.localizedDescription)
                 log.add("Ошибка \(meta.name): \(error.localizedDescription)", .error)
                 lastError = error.localizedDescription
             }
         } else if (200..<300).contains(status) {
+            retries[meta.key] = nil
             let resp = try? JSONDecoder().decode(UploadResponse.self, from: data)
             store.markDone(meta.key, path: resp?.path ?? meta.path, size: resp?.size ?? meta.size)
             doneInScope += 1
@@ -721,20 +886,26 @@ final class SyncEngine: NSObject, ObservableObject {
 
 extension SyncEngine: URLSessionDataDelegate {
     nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        let id = dataTask.taskIdentifier
-        Task { @MainActor in self.handleData(taskID: id, data: data) }
+        guard let key = Self.meta(of: dataTask)?.key else { return }
+        Task { @MainActor in self.handleData(key: key, data: data) }
     }
 
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didSendBodyData bytesSent: Int64,
                                 totalBytesSent: Int64, totalBytesExpectedToSend: Int64) {
-        Task { @MainActor in self.handleSent(bytesSent) }
+        let key = Self.meta(of: task)?.key
+        let id = task.taskIdentifier
+        let isFg = session.configuration.identifier == nil
+        Task { @MainActor in
+            self.handleSent(bytesSent, key: key, taskID: id, isFg: isFg, sent: totalBytesSent, expected: totalBytesExpectedToSend)
+        }
     }
 
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         let meta = Self.meta(of: task)
         let status = (task.response as? HTTPURLResponse)?.statusCode ?? 0
         let id = task.taskIdentifier
-        Task { @MainActor in self.handleComplete(meta: meta, taskID: id, status: status, error: error) }
+        let isFg = session.configuration.identifier == nil
+        Task { @MainActor in self.handleComplete(meta: meta, taskID: id, isFg: isFg, status: status, error: error) }
     }
 
     nonisolated func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
