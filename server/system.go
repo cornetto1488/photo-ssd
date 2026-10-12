@@ -189,7 +189,8 @@ func wttrWeather() []byte {
 	defer resp.Body.Close()
 	var j struct {
 		Current []struct {
-			TempC, FeelsLikeC, Humidity, WindspeedKmph, WeatherCode string
+			TempC                                         string `json:"temp_C"`
+			FeelsLikeC, Humidity, WindspeedKmph, WeatherCode string
 		} `json:"current_condition"`
 		Weather []struct {
 			Date, MaxtempC, MintempC string
