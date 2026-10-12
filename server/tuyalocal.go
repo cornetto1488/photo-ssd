@@ -332,6 +332,10 @@ func (t *tuyaConn) decodeDPS(f *frame) (map[string]any, error) {
 	} else if len(p) > 15 && (bytes.HasPrefix(p, []byte("3.4")) || bytes.HasPrefix(p, []byte("3.5"))) {
 		p = p[15:]
 	}
+	// шлюз без собственных DP отвечает текстом "json obj data unvalid" — ключ верный, связь есть
+	if bytes.HasPrefix(bytes.TrimSpace(p), []byte("json obj")) {
+		return map[string]any{}, nil
+	}
 	var out struct {
 		DPS  map[string]any `json:"dps"`
 		Data struct {
