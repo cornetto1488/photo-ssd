@@ -4,3 +4,4 @@ ios/build/
 ios/*.xcodeproj/
 *.ipa
 dist/
+server/portal/fonts/

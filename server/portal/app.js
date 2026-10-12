@@ -115,6 +115,7 @@ function lockCountdown(sec) {
 async function showLock() {
   Object.entries(timers).forEach(([k, t]) => { if (k !== "toast") clearInterval(t); });
   started = false;
+  $("#boot").classList.add("done");
   $("#app").classList.add("hidden"); $("#login").classList.remove("hidden");
   try {
     const info = await api("/api/home/pin-info");

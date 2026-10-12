@@ -16,6 +16,10 @@ jobs:
       - name: Build photossd (linux/arm64)
         working-directory: server
         run: |
+          mkdir -p portal/fonts
+          curl -fsSL -o portal/fonts/Onest.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/onest/Onest%5Bwght%5D.ttf"
+          curl -fsSL -o portal/fonts/Inter.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
+          curl -fsSL -o portal/fonts/JetBrainsMono.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
           go vet ./...
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../dist/photossd-linux-arm64 .
       - uses: actions/upload-artifact@v4
