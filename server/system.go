@@ -3,12 +3,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -141,3 +143,116 @@ func (p *homePortal) handleSystem(w http.ResponseWriter, r *http.Request) {
 }
 
 
+
+// Погода для окна на главной: роутер сам спрашивает Open-Meteo и держит ответ 10 минут.
+var weatherCache struct {
+	sync.Mutex
+	at   time.Time
+	body []byte
+}
+
+func (p *homePortal) handleWeather(w http.ResponseWriter, r *http.Request) {
+	weatherCache.Lock()
+	defer weatherCache.Unlock()
+	if time.Since(weatherCache.at) > 10*time.Minute || weatherCache.body == nil {
+		u := "https://api.open-meteo.com/v1/forecast?latitude=55.03&longitude=73.37&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day" +
+			"&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&forecast_days=4&wind_speed_unit=ms"
+		c := &http.Client{Timeout: 4 * time.Second}
+		if resp, err := c.Get(u); err == nil {
+			b, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
+			resp.Body.Close()
+			if resp.StatusCode == 200 {
+				weatherCache.body, weatherCache.at = b, time.Now()
+			}
+		}
+	}
+	if weatherCache.body == nil || time.Since(weatherCache.at) > 10*time.Minute {
+		if b := wttrWeather(); b != nil {
+			weatherCache.body, weatherCache.at = b, time.Now()
+		}
+	}
+	if weatherCache.body == nil {
+		fail(w, http.StatusBadGateway, "погода недоступна")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(weatherCache.body)
+}
+
+// wttr.in — запасной источник (Open-Meteo из России открывается не всегда); ответ приводится к формату Open-Meteo.
+func wttrWeather() []byte {
+	c := &http.Client{Timeout: 10 * time.Second}
+	resp, err := c.Get("https://wttr.in/55.03,73.37?format=j1")
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	var j struct {
+		Current []struct {
+			TempC, FeelsLikeC, Humidity, WindspeedKmph, WeatherCode string
+		} `json:"current_condition"`
+		Weather []struct {
+			Date, MaxtempC, MintempC string
+			Astronomy                []struct{ Sunrise, Sunset string } `json:"astronomy"`
+			Hourly                   []struct{ WeatherCode string } `json:"hourly"`
+		} `json:"weather"`
+	}
+	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&j) != nil || len(j.Current) == 0 {
+		return nil
+	}
+	num := func(s string) float64 { var f float64; fmt.Sscan(s, &f); return f }
+	wmo := func(code string) int {
+		n := int(num(code))
+		switch {
+		case n == 113:
+			return 0
+		case n == 116:
+			return 2
+		case n == 119 || n == 122:
+			return 3
+		case n == 143 || n == 248 || n == 260:
+			return 45
+		case n == 200 || n >= 386:
+			return 95
+		case n == 179 || n == 227 || n == 230 || (n >= 323 && n <= 338) || n == 368 || n == 371:
+			if n == 338 || n == 230 || n == 371 {
+				return 75
+			}
+			return 73
+		case n == 182 || n == 185 || n == 281 || n == 284 || (n >= 311 && n <= 320) || n == 350 || (n >= 362 && n <= 377):
+			return 66
+		case n >= 299 && n <= 314 || n == 356 || n == 359:
+			return 65
+		default:
+			return 61
+		}
+	}
+	cur := j.Current[0]
+	isDay := 1
+	now := time.Now()
+	if len(j.Weather) > 0 && len(j.Weather[0].Astronomy) > 0 {
+		a := j.Weather[0].Astronomy[0]
+		rise, e1 := time.ParseInLocation("2006-01-02 03:04 PM", j.Weather[0].Date+" "+a.Sunrise, now.Location())
+		set, e2 := time.ParseInLocation("2006-01-02 03:04 PM", j.Weather[0].Date+" "+a.Sunset, now.Location())
+		if e1 == nil && e2 == nil && (now.Before(rise) || now.After(set)) {
+			isDay = 0
+		}
+	}
+	out := map[string]any{"source": "wttr.in", "current": map[string]any{
+		"temperature_2m": num(cur.TempC), "apparent_temperature": num(cur.FeelsLikeC), "relative_humidity_2m": num(cur.Humidity),
+		"wind_speed_10m": num(cur.WindspeedKmph) / 3.6, "weather_code": wmo(cur.WeatherCode), "is_day": isDay}}
+	d := map[string][]any{"time": {}, "weather_code": {}, "temperature_2m_max": {}, "temperature_2m_min": {}}
+	for _, day := range j.Weather {
+		code := 0
+		if len(day.Hourly) > 4 {
+			code = wmo(day.Hourly[4].WeatherCode)
+		}
+		d["time"] = append(d["time"], day.Date)
+		d["weather_code"] = append(d["weather_code"], code)
+		d["temperature_2m_max"] = append(d["temperature_2m_max"], num(day.MaxtempC))
+		d["temperature_2m_min"] = append(d["temperature_2m_min"], num(day.MintempC))
+	}
+	out["daily"] = d
+	b, _ := json.Marshal(out)
+	return b
+}

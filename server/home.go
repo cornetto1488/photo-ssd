@@ -1099,6 +1099,7 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/client-name":  p.handleClientName,
 		"/api/home/passwords":    p.pw.handle,
 		"/api/home/system":       p.handleSystem,
+		"/api/home/weather":      p.handleWeather,
 	}
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))

@@ -156,11 +156,13 @@ textarea.field { resize: vertical; min-height: 44px; line-height: 1.45; }
 @media (max-width: 1100px) { .scenes { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 860px) {
   .hearth { grid-template-columns: 1fr; }
-  .fire-card { min-height: 300px; } .window-card { min-height: 240px; }
+  .fire-card { min-height: 300px; } .window-card { min-height: 330px; }
+  .win-days { left: 18px; right: 18px; bottom: 20px; } .win-days div { flex: 1; }
   .fire-cap { padding: 20px; max-width: 78%; min-height: 300px; }
   .cozy-strip { grid-template-columns: repeat(5, 70%); overflow-x: auto; scroll-snap-type: x mandatory; margin: 18px -16px 6px; padding: 0 16px; scrollbar-width: none; }
   .cozy-strip figure { scroll-snap-align: start; aspect-ratio: 1.2; }
-  .scenes { grid-template-columns: repeat(2, 1fr); }
+  .scenes { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .scene { padding: 12px 10px; border-radius: 16px; } .scene i { font-size: 20px; margin-bottom: 2px; } .scene b { font-size: 12px; } .scene span { display: none; }
   .vault { grid-template-columns: 1fr; }
   .groups { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; padding: 6px; }
   .grp { flex: none; } .grp-h, .grp-empty { display: none; }

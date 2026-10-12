@@ -165,10 +165,7 @@ const WICON = { clear: "☀", cloud: "☁", fog: "≋", rain: "☂", snow: "❄"
 let weather = null;
 async function loadWeather() {
   try {
-    const u = "https://api.open-meteo.com/v1/forecast?latitude=55.03&longitude=73.37&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day" +
-      "&daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&forecast_days=4&wind_speed_unit=ms";
-    const r = await fetch(u); if (!r.ok) throw new Error(r.status);
-    weather = await r.json();
+    weather = await api("/api/home/weather");
     try { localStorage.setItem("zh-weather", JSON.stringify(weather)); } catch (e) {}
   } catch (e) {
     try { weather = JSON.parse(localStorage.getItem("zh-weather") || "null"); } catch (er) {}
@@ -176,7 +173,7 @@ async function loadWeather() {
   renderWeather();
 }
 function renderWeather() {
-  if (!weather?.current) { $("#wDesc").textContent = "погода недоступна"; return; }
+  if (!weather?.current) { $("#wDesc").textContent = "погода недоступна"; $("#wTemp").textContent = "—°"; return; }
   const c = weather.current, w = WEATHER[c.weather_code] || ["—", "cloud"];
   $("#wTemp").textContent = `${c.temperature_2m > 0 ? "+" : ""}${Math.round(c.temperature_2m)}°`;
   $("#wDesc").textContent = w[0];
