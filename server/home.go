@@ -151,6 +151,8 @@ type homeDevice struct {
 	Product  string        `json:"product"`
 	Room     string        `json:"room"`
 	Kind     string        `json:"kind"` // light, switch, plug, pc, gateway, other
+	ProductID string       `json:"productId"`
+	Local    bool          `json:"local"` // управляется напрямую по сети
 	Status   []deviceState `json:"status"`
 }
 
@@ -167,12 +169,24 @@ type homePortal struct {
 	rooms   map[string]string // id устройства -> комната
 	roomsAt time.Time
 	pin     *pinAuth
+	local   *tuyaLocal
 }
+
+func netDial(addr string, d time.Duration) (net.Conn, error) { return net.DialTimeout("tcp", addr, d) }
 
 func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile string) *homePortal {
 	p := &homePortal{s: s, tuya: loadTuya(tuyaConf), pcIP: pcIP, pcMAC: pcMAC, rooms: map[string]string{},
 		pin: newPinAuth(pinFile, s.meta("sessions.json"))}
 	s.sessionCheck = p.pin.sessionOK
+	if p.tuya != nil {
+		p.local = newTuyaLocal(p)
+		go func() {
+			for {
+				p.local.discover()
+				time.Sleep(15 * time.Minute)
+			}
+		}()
+	}
 	if u, err := url.Parse(proxyTo); err == nil && proxyTo != "" {
 		p.proxy = httputil.NewSingleHostReverseProxy(u)
 	}
@@ -280,7 +294,10 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 		hd := homeDevice{
 			ID: id, Name: strings.TrimSpace(fmt.Sprint(dm["name"])), Category: cat,
 			Product: fmt.Sprint(dm["product_name"]), Room: p.rooms[id],
-			Kind: kindOf(cat, id, p.tuya.device),
+			Kind: kindOf(cat, id, p.tuya.device), ProductID: fmt.Sprint(dm["product_id"]),
+		}
+		if p.local != nil {
+			hd.Local = p.local.known(id)
 		}
 		hd.Online, _ = dm["online"].(bool)
 		if ic, _ := dm["icon"].(string); ic != "" {
@@ -345,8 +362,25 @@ func (p *homePortal) state(id string) []deviceState {
 }
 
 func (p *homePortal) command(id string, cmds []deviceState) error {
-	body, _ := json.Marshal(map[string]any{"commands": cmds})
-	_, err := p.tuya.call("POST", "/v1.0/iot-03/devices/"+id+"/commands", string(body))
+	var err error
+	// Сначала — напрямую по домашней сети (быстро, без облака и квот).
+	if p.local != nil && p.local.known(id) {
+		prod := ""
+		p.devMu.Lock()
+		for _, d := range p.devs {
+			if d.ID == id {
+				prod = d.ProductID
+			}
+		}
+		p.devMu.Unlock()
+		if err = p.local.set(id, prod, cmds); err != nil {
+			log.Printf("tuya local %s: %v — пробую облако", id, err)
+		}
+	}
+	if err != nil || p.local == nil || !p.local.known(id) {
+		body, _ := json.Marshal(map[string]any{"commands": cmds})
+		_, err = p.tuya.call("POST", "/v1.0/iot-03/devices/"+id+"/commands", string(body))
+	}
 	if err == nil {
 		// Сразу обновим кэш, чтобы панель показала новое состояние.
 		p.devMu.Lock()

@@ -91,7 +91,12 @@ func main() {
 	pcIP := flag.String("pc-ip", "192.168.1.104", "IP компьютера")
 	pcMAC := flag.String("pc-mac", "C8:7F:54:A9:D9:C1", "MAC компьютера")
 	pinFile := flag.String("pin-file", "/etc/zalet-portal.json", "PIN панели (хэш)")
+	tuyaProbe := flag.Bool("tuya-probe", false, "проверить локальное управление Tuya и выйти")
 	flag.Parse()
+	if *tuyaProbe {
+		runProbeCLI(*tuyaConf)
+		return
+	}
 
 	tok, err := os.ReadFile(*tokenFile)
 	if err != nil || strings.TrimSpace(string(tok)) == "" {
