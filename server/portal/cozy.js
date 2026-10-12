@@ -104,46 +104,9 @@ const fire = (() => {
   }
   function start() { resize(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
-  function addLog() { boost = 1; spark(40); buzz(15); crackle.burst(); }
   window.addEventListener("resize", () => { if (W) resize(); });
-  return { start, stop, addLog, get running() { return !!raf; } };
+  return { start, stop };
 })();
-
-// треск камина — синтез, без загрузки файлов
-const crackle = (() => {
-  let ac = null, on = false, gain = null, timer = 0;
-  function pop(strength = 1) {
-    if (!ac) return;
-    const len = Math.floor(ac.sampleRate * (0.004 + Math.random() * 0.02));
-    const buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
-    const s = ac.createBufferSource(); s.buffer = buf;
-    const f = ac.createBiquadFilter(); f.type = "highpass"; f.frequency.value = 800 + Math.random() * 2500;
-    const g = ac.createGain(); g.gain.value = (0.15 + Math.random() * 0.5) * strength;
-    s.connect(f); f.connect(g); g.connect(gain); s.start();
-  }
-  function rumble() {
-    const len = ac.sampleRate * 2, buf = ac.createBuffer(1, len, ac.sampleRate), d = buf.getChannelData(0);
-    let last = 0; for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
-    const s = ac.createBufferSource(); s.buffer = buf; s.loop = true;
-    const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 400;
-    const g = ac.createGain(); g.gain.value = 0.35; s.connect(f); f.connect(g); g.connect(gain); s.start();
-  }
-  function loop() { if (!on) return; const n = Math.random() < 0.15 ? 3 : 1; for (let i = 0; i < n; i++) setTimeout(() => pop(), i * 40); timer = setTimeout(loop, 60 + Math.random() * 420); }
-  return {
-    toggle() {
-      on = !on;
-      if (on) {
-        if (!ac) { const C = window.AudioContext || window.webkitAudioContext; if (!C) return false; ac = new C(); gain = ac.createGain(); gain.gain.value = 0.5; gain.connect(ac.destination); rumble(); }
-        ac.resume(); loop();
-      } else { clearTimeout(timer); ac && ac.suspend(); }
-      return on;
-    },
-    burst() { if (on) for (let i = 0; i < 8; i++) setTimeout(() => pop(1.4), i * 55 + Math.random() * 40); },
-  };
-})();
-$("#fireLog").onclick = () => fire.addLog();
-$("#fireSound").onclick = () => { const on = crackle.toggle(); $("#fireSound").textContent = on ? "♪ Треск: вкл" : "♪ Треск: выкл"; $("#fireSound").classList.toggle("btn-acc", on); };
 
 function renderMood() {
   const h = new Date().getHours();
@@ -273,38 +236,12 @@ function cozyRun(on) {
 }
 document.addEventListener("visibilitychange", () => cozyRun(page === "home"));
 
-// ---------- сцены света ----------
-const SCENES = [
-  { id: "fire", t: "Вечер у камина", s: "тёплый приглушённый", i: "🔥", bright: 35, temp: 0 },
-  { id: "movie", t: "Кино", s: "почти темно", i: "🎬", bright: 8, temp: 0 },
-  { id: "read", t: "Почитать", s: "мягкий тёплый", i: "📖", bright: 70, temp: 25 },
-  { id: "morning", t: "Утро", s: "бодрый дневной", i: "☀", bright: 90, temp: 70 },
-  { id: "bright", t: "Яркий свет", s: "на полную", i: "✦", bright: 100, temp: 50 },
-  { id: "night", t: "Спокойной ночи", s: "выключить всё", i: "☾", off: true },
-];
-$("#scenes").innerHTML = SCENES.map((s) => `<button class="scene" data-scene="${s.id}"><i>${s.i}</i><b>${esc(s.t)}</b><span>${esc(s.s)}</span></button>`).join("");
-$$("#scenes [data-scene]").forEach((b) => b.onclick = async () => {
-  const sc = SCENES.find((x) => x.id === b.dataset.scene);
-  if (sc.off) {
-    if (!(await askConfirm({ icon: "☾", title: "Спокойной ночи?", text: "Выключу весь свет в доме. Компьютер не затронется.", yes: "Выключить" }))) return;
-    try { const r = await post("/api/home/alloff"); toast(`Спокойной ночи ☾ · выключено ${r.done}`); } catch (e) { toast(e.message, true); }
-    return;
-  }
-  const lights = devices.filter((d) => d.kind === "light" && d.online);
-  if (!lights.length) { toast("Нет ламп в сети", true); return; }
-  $$("#scenes .scene").forEach((x) => x.classList.toggle("active", x === b));
-  b.classList.add("busy");
-  await Promise.all(lights.map((d) => sendCmd(d.id, [{ code: "switch_led", value: true }, { code: "work_mode", value: "white" },
-    { code: "bright_value_v2", value: Math.round(10 + sc.bright / 100 * 990) }, { code: "temp_value_v2", value: sc.temp * 10 }])));
-  b.classList.remove("busy");
-  toast(`${sc.i} ${sc.t} · ${lights.length} ${plural(lights.length, "лампа", "лампы", "ламп")}`);
-});
-
 // ---------- тёплые фото ----------
 const COZY = [
-  ["photo-1543393470-b2c833b98dce", "Огонь"], ["photo-1414124488080-0188dcbb8834", "Книга и чай"], ["photo-1510798831971-661eb04b3739", "Зима за городом"],
-  ["photo-1607196707151-2db8b71294ba", "Какао"], ["photo-1622429420355-5677170f4fad", "Свечи"], ["photo-1785470658816-c28e206cc19d", "Свет в окнах"],
-  ["photo-1523391571866-235461b18fae", "Поленья"], ["photo-1767721309252-0e74ac35a783", "Дом ночью"], ["photo-1579518569016-f48d65c17159", "Вид из окна"],
+  ["photo-1704400398712-36422dfbe4ec", "Зимний Омск"], ["photo-1705217813555-cb87950fedcc", "Двор в снегу"], ["photo-1705217813588-67b68a16c935", "Варежки на заборе"],
+  ["photo-1705217886824-41ffc20bae20", "Скамейки в снегу"], ["photo-1705217848876-b6413e3f414b", "Солнце сквозь деревья"], ["photo-1705217887093-e43b578f9b1f", "Тихая улица"],
+  ["photo-1705217886799-959ac4a015ec", "Вечерний Омск"], ["photo-1704400398595-3ddbcf4dc74a", "Вид из окна"], ["photo-1704400397786-5e0388613ac0", "Огни праздника"],
+  ["photo-1575457180622-9ca8a083c50a", "Омское лето"],
 ];
 $("#cozyStrip").innerHTML = COZY.sort(() => Math.random() - 0.5).slice(0, 5).map(([id, cap], i) =>
   `<figure style="--d:${i * 2.4}s"><img loading="lazy" src="https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop" alt="" onload="this.classList.add('show')" onerror="this.closest('figure').remove()"><figcaption>${esc(cap)}</figcaption></figure>`).join("");
