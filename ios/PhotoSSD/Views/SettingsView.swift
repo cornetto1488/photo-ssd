@@ -411,6 +411,7 @@ struct FormatSettings: View {
 
 struct TransferSettings: View {
     @EnvironmentObject var settings: AppSettings
+    @EnvironmentObject var engine: SyncEngine
     var body: some View {
         ThemedForm {
             Section {
@@ -439,6 +440,7 @@ struct TransferSettings: View {
         }
         .navigationTitle("Передача и фон")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: settings.wifiOnly) { _ in engine.refreshWifiWait() }
     }
 }
 

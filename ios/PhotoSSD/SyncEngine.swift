@@ -4,6 +4,7 @@ import UIKit
 import ImageIO
 import UniformTypeIdentifiers
 import BackgroundTasks
+import Network
 
 /// Что нужно выгрузить: конкретная часть конкретного снимка.
 struct PendingRef: Hashable, Sendable {
@@ -72,6 +73,8 @@ final class SyncEngine: NSObject, ObservableObject {
     @Published private(set) var queuedKeys: Set<String> = []
     @Published private(set) var inflightKeys: Set<String> = []
     @Published private(set) var lastError: String?
+    @Published fileprivate(set) var scanProgress: Double = 0
+    @Published private(set) var waitingWifi = false
     @Published private(set) var landed = 0             // счётчик для анимации «залёта»
     @Published private(set) var lastLandedName = ""
 
@@ -113,7 +116,23 @@ final class SyncEngine: NSObject, ObservableObject {
         _ = session(id: Self.sessionAny)
         PHPhotoLibrary.shared().register(self)
         restoreInflight()
+        pathMonitor.pathUpdateHandler = { path in
+            let wifi = path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet)
+            Task { @MainActor in SyncEngine.shared.onWifiChange(wifi) }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "zalet.path"))
     }
+
+    private let pathMonitor = NWPathMonitor()
+    private(set) var onWifi = true
+
+    fileprivate func onWifiChange(_ wifi: Bool) {
+        onWifi = wifi
+        waitingWifi = settings.wifiOnly && !wifi
+    }
+
+    /// Пересчитать после смены настройки «Только по Wi-Fi».
+    func refreshWifiWait() { waitingWifi = settings.wifiOnly && !onWifi }
 
     // MARK: Сессии
 
@@ -212,8 +231,12 @@ final class SyncEngine: NSObject, ObservableObject {
         }
 
         state = .scanning
+        scanProgress = 0
         let cfg = scanConfig()
-        let result = await Self.scan(cfg)
+        let result = await Self.scan(cfg) { p in
+            Task { @MainActor in SyncEngine.shared.scanProgress = p }
+        }
+        scanProgress = 1
         let doneKeys = Set(store.done.keys)
         let pending = result.filter { !doneKeys.contains($0.key) && !inflightKeys.contains($0.key) }
 
@@ -335,6 +358,11 @@ final class SyncEngine: NSObject, ObservableObject {
         case .screenshot: guard cfg.includeScreenshots else { return [] }
         case .photo, .live: guard cfg.includePhotos else { return [] }
         }
+        // Быстрый путь: для оригиналов состав снимка ясен по его типу — без медленного запроса ресурсов.
+        if cfg.versionMode == .original {
+            if a.mediaType == .video { return [.video] }
+            return (k == .live && cfg.includeLive) ? [.photo, .liveVideo] : [.photo]
+        }
         let res = PHAssetResource.assetResources(for: a)
         let types = Set(res.map(\.type))
         var out: [ResourceRole] = []
@@ -366,15 +394,17 @@ final class SyncEngine: NSObject, ObservableObject {
         return out
     }
 
-    nonisolated static func scan(_ cfg: ScanConfig) async -> [PendingRef] {
+    nonisolated static func scan(_ cfg: ScanConfig, progress: (@Sendable (Double) -> Void)? = nil) async -> [PendingRef] {
         await Task.detached(priority: .userInitiated) {
             let assets = fetchAssets(cfg)
+            let total = max(1, assets.count)
             var out: [PendingRef] = []
             out.reserveCapacity(assets.count)
-            assets.enumerateObjects { a, _, _ in
+            assets.enumerateObjects { a, i, _ in
                 for r in roles(for: a, cfg) {
                     out.append(PendingRef(key: SyncStore.key(a.localIdentifier, r), assetID: a.localIdentifier, role: r))
                 }
+                if i % 300 == 0 { progress?(Double(i) / Double(total)) }
             }
             return out
         }.value

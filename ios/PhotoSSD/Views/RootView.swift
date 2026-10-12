@@ -26,6 +26,14 @@ struct HomeView: View {
     private var progress: Double {
         engine.totalInScope == 0 ? (store.done.isEmpty ? 0 : 1) : Double(engine.doneInScope) / Double(engine.totalInScope)
     }
+    private var statusText: String {
+        switch engine.state {
+        case .scanning: return "Сканирую медиатеку · \(Int(engine.scanProgress * 100))%"
+        case .syncing where engine.waitingWifi: return "Ждёт Wi-Fi · «Только по Wi-Fi» включено"
+        default: return engine.state.title
+        }
+    }
+
     private var isBusy: Bool {
         switch engine.state { case .checking, .scanning, .syncing: return true; default: return false }
     }
@@ -73,7 +81,7 @@ struct HomeView: View {
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: 14) {
-            MonoLabel(text: engine.state.title, number: "01")
+            MonoLabel(text: statusText, number: "01", color: engine.waitingWifi && engine.state == .syncing ? Theme.acc2 : Theme.muted)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("\(Int((progress * 100).rounded()))")
                     .font(F.display(92, 800))
