@@ -72,7 +72,8 @@ type server struct {
 	root  string
 	token string
 
-	mux *http.ServeMux
+	mux          *http.ServeMux
+	sessionCheck func(*http.Request) bool // вход в панель по PIN (cookie)
 
 	mu    sync.Mutex
 	byID  map[string]*record
@@ -89,6 +90,7 @@ func main() {
 	tuyaConf := flag.String("tuya-conf", "/etc/pc-remote.conf", "настройки облака Tuya")
 	pcIP := flag.String("pc-ip", "192.168.1.104", "IP компьютера")
 	pcMAC := flag.String("pc-mac", "C8:7F:54:A9:D9:C1", "MAC компьютера")
+	pinFile := flag.String("pin-file", "/etc/zalet-portal.json", "PIN панели (хэш)")
 	flag.Parse()
 
 	tok, err := os.ReadFile(*tokenFile)
@@ -128,7 +130,7 @@ func main() {
 	}
 	s.mux = mux
 	if *portalListen != "" {
-		newPortal(s, *tuyaConf, *portalProxy, *pcIP, *pcMAC).listen(*portalListen)
+		newPortal(s, *tuyaConf, *portalProxy, *pcIP, *pcMAC, *pinFile).listen(*portalListen)
 	}
 	srv := &http.Server{Addr: *listen, Handler: mux, ReadHeaderTimeout: 30 * time.Second, IdleTimeout: 120 * time.Second}
 	log.Printf("photossd %s: %s -> %s (%d записей)", version, *listen, s.root, len(s.byID))
@@ -246,6 +248,10 @@ func (s *server) auth(h http.HandlerFunc) http.HandlerFunc {
 		got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if got == "" {
 			got = r.URL.Query().Get("token")
+		}
+		if got == "" && s.sessionCheck != nil && s.sessionCheck(r) {
+			h(w, r)
+			return
 		}
 		if subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
 			writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "неверный токен"})

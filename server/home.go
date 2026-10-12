@@ -165,10 +165,13 @@ type homePortal struct {
 	homeID  string
 	rooms   map[string]string // id устройства -> комната
 	roomsAt time.Time
+	pin     *pinAuth
 }
 
-func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC string) *homePortal {
-	p := &homePortal{s: s, tuya: loadTuya(tuyaConf), pcIP: pcIP, pcMAC: pcMAC, rooms: map[string]string{}}
+func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile string) *homePortal {
+	p := &homePortal{s: s, tuya: loadTuya(tuyaConf), pcIP: pcIP, pcMAC: pcMAC, rooms: map[string]string{},
+		pin: newPinAuth(pinFile, s.meta("sessions.json"))}
+	s.sessionCheck = p.pin.sessionOK
 	if u, err := url.Parse(proxyTo); err == nil && proxyTo != "" {
 		p.proxy = httputil.NewSingleHostReverseProxy(u)
 	}
@@ -633,6 +636,196 @@ func (p *homePortal) handleClients(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"clients": list})
 }
 
+// ---------- вход по PIN ----------
+
+type pinAuth struct {
+	file     string
+	sessFile string
+	mu       sync.Mutex
+	salt     string
+	hash     string
+	length   int
+	sessions map[string]time.Time
+	fails    map[string]int
+	lockTill map[string]time.Time
+}
+
+const sessionDays = 30
+
+func newPinAuth(file, sessFile string) *pinAuth {
+	a := &pinAuth{file: file, sessFile: sessFile, sessions: map[string]time.Time{},
+		fails: map[string]int{}, lockTill: map[string]time.Time{}}
+	var cfg struct {
+		Salt   string `json:"salt"`
+		Hash   string `json:"hash"`
+		Length int    `json:"length"`
+	}
+	if b, err := os.ReadFile(file); err == nil && json.Unmarshal(b, &cfg) == nil {
+		a.salt, a.hash, a.length = cfg.Salt, cfg.Hash, cfg.Length
+	}
+	if b, err := os.ReadFile(sessFile); err == nil {
+		json.Unmarshal(b, &a.sessions)
+	}
+	return a
+}
+
+func (a *pinAuth) enabled() bool { return a.hash != "" }
+
+func pinHash(salt, pin string) string {
+	h := sha256.Sum256([]byte(salt + pin))
+	return hex.EncodeToString(h[:])
+}
+
+func randHex(n int) string {
+	b := make([]byte, n)
+	f, err := os.Open("/dev/urandom")
+	if err == nil {
+		io.ReadFull(f, b)
+		f.Close()
+	}
+	return hex.EncodeToString(b)
+}
+
+func (a *pinAuth) saveSessions() {
+	now := time.Now()
+	for k, exp := range a.sessions {
+		if now.After(exp) {
+			delete(a.sessions, k)
+		}
+	}
+	b, _ := json.Marshal(a.sessions)
+	os.WriteFile(a.sessFile, b, 0o600)
+}
+
+func clientIP(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
+}
+
+func (a *pinAuth) sessionOK(r *http.Request) bool {
+	c, err := r.Cookie("zh")
+	if err != nil || c.Value == "" {
+		return false
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	exp, ok := a.sessions[c.Value]
+	return ok && time.Now().Before(exp)
+}
+
+func (a *pinAuth) handleInfo(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	wait := int(time.Until(a.lockTill[clientIP(r)]).Seconds())
+	a.mu.Unlock()
+	if wait < 0 {
+		wait = 0
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"enabled": a.enabled(), "length": a.length, "locked": wait, "authed": a.sessionOK(r)})
+}
+
+func (a *pinAuth) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !needPost(w, r) {
+		return
+	}
+	var req struct {
+		Pin string `json:"pin"`
+	}
+	json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&req)
+	ip := clientIP(r)
+	a.mu.Lock()
+	if wait := time.Until(a.lockTill[ip]); wait > 0 {
+		a.mu.Unlock()
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": "слишком много попыток", "locked": int(wait.Seconds()) + 1})
+		return
+	}
+	if !a.enabled() || pinHash(a.salt, req.Pin) != a.hash {
+		a.fails[ip]++
+		n := a.fails[ip]
+		left := 5 - n
+		lock := 0
+		if n >= 5 {
+			// 60 с, потом 2, 4, 8, 15 минут
+			d := time.Minute << uint(min(n-5, 4))
+			if d > 15*time.Minute {
+				d = 15 * time.Minute
+			}
+			a.lockTill[ip] = time.Now().Add(d)
+			lock = int(d.Seconds())
+			left = 0
+		}
+		a.mu.Unlock()
+		log.Printf("панель: неверный PIN с %s (%d)", ip, n)
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"error": "неверный PIN", "left": left, "locked": lock})
+		return
+	}
+	delete(a.fails, ip)
+	delete(a.lockTill, ip)
+	tok := randHex(24)
+	a.sessions[tok] = time.Now().Add(sessionDays * 24 * time.Hour)
+	a.saveSessions()
+	a.mu.Unlock()
+	http.SetCookie(w, &http.Cookie{Name: "zh", Value: tok, Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode,
+		MaxAge: sessionDays * 86400})
+	log.Printf("панель: вход с %s", ip)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *pinAuth) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if c, err := r.Cookie("zh"); err == nil {
+		a.mu.Lock()
+		delete(a.sessions, c.Value)
+		a.saveSessions()
+		a.mu.Unlock()
+	}
+	http.SetCookie(w, &http.Cookie{Name: "zh", Value: "", Path: "/", MaxAge: -1})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (a *pinAuth) handleChange(w http.ResponseWriter, r *http.Request) {
+	if !needPost(w, r) {
+		return
+	}
+	var req struct {
+		Current string `json:"current"`
+		Next    string `json:"next"`
+	}
+	json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&req)
+	if len(req.Next) < 4 || len(req.Next) > 8 || strings.Trim(req.Next, "0123456789") != "" {
+		fail(w, http.StatusBadRequest, "PIN — от 4 до 8 цифр")
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.enabled() && pinHash(a.salt, req.Current) != a.hash {
+		fail(w, http.StatusUnauthorized, "текущий PIN неверный")
+		return
+	}
+	salt := randHex(16)
+	cfg := map[string]any{"salt": salt, "hash": pinHash(salt, req.Next), "length": len(req.Next)}
+	b, _ := json.Marshal(cfg)
+	if err := os.WriteFile(a.file, b, 0o600); err != nil {
+		fail(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	a.salt, a.hash, a.length = salt, cfg["hash"].(string), len(req.Next)
+	// Остальные входы сбрасываем — остаётся только текущий.
+	keep := ""
+	if c, err := r.Cookie("zh"); err == nil {
+		keep = c.Value
+	}
+	for k := range a.sessions {
+		if k != keep {
+			delete(a.sessions, k)
+		}
+	}
+	a.saveSessions()
+	log.Printf("панель: PIN изменён (%s)", clientIP(r))
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // ---------- журналы ----------
 
 type logLine struct {
@@ -742,6 +935,10 @@ func (p *homePortal) handler() http.Handler {
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))
 	}
+	mux.HandleFunc("/api/home/pin-info", p.pin.handleInfo)
+	mux.HandleFunc("/api/home/login", p.pin.handleLogin)
+	mux.HandleFunc("/api/home/logout", p.pin.handleLogout)
+	mux.HandleFunc("/api/home/pin", p.s.auth(p.pin.handleChange))
 	// API ZALET тоже доступно через панель (последние фото, превью).
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		p.s.mux.ServeHTTP(w, r)

@@ -5,9 +5,8 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
-let TOKEN = "";
-try { TOKEN = localStorage.getItem("zaletToken") || ""; } catch (e) {}
 let page = "home";
+let started = false;
 let status = null;
 let devices = [];
 let logSource = "";
@@ -35,35 +34,130 @@ function toast(msg, bad) {
   clearTimeout(timers.toast); timers.toast = setTimeout(() => t.classList.remove("show"), 2600);
 }
 async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" } });
-  if (r.status === 401) { logout(); throw new Error("Неверный токен"); }
+  const r = await fetch(path, { credentials: "same-origin", ...opts, headers: { ...(opts.headers || {}), "Content-Type": "application/json" } });
+  if (r.status === 401 && !path.startsWith("/api/home/login") && !path.startsWith("/api/home/pin")) { showLock(); throw new Error("Нужен вход"); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(j.error || ("Ошибка " + r.status));
+  if (!r.ok) { const e = new Error(j.error || ("Ошибка " + r.status)); e.data = j; e.status = r.status; throw e; }
   return j;
 }
 const post = (path, body) => api(path, { method: "POST", body: body ? JSON.stringify(body) : undefined });
+const buzz = (p) => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+
+// ---------- клавиатура PIN ----------
+function makePad(padEl, dotsEl, msgEl, onDone) {
+  let len = 4, value = "", busy = false;
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "⌫"];
+  const letters = { 2: "ABC", 3: "DEF", 4: "GHI", 5: "JKL", 6: "MNO", 7: "PQRS", 8: "TUV", 9: "WXYZ" };
+  padEl.innerHTML = keys.map((k) => k === "" ? `<span></span>` :
+    `<button type="button" data-k="${k}" class="${k === "⌫" ? "ghost" : ""}">${k}${letters[k] ? `<small>${letters[k]}</small>` : ""}</button>`).join("");
+  const draw = () => {
+    dotsEl.innerHTML = Array.from({ length: len }, (_, i) => `<i class="${i < value.length ? "on" : ""}"></i>`).join("");
+  };
+  const press = (k, btn) => {
+    if (busy) return;
+    if (btn) {
+      btn.classList.add("press"); setTimeout(() => btn.classList.remove("press"), 120);
+      const r = document.createElement("span"); r.className = "ripple";
+      const s = btn.offsetWidth; r.style.width = r.style.height = s + "px"; r.style.left = r.style.top = "0px";
+      btn.appendChild(r); setTimeout(() => r.remove(), 560);
+    }
+    if (k === "⌫") { value = value.slice(0, -1); draw(); buzz(8); return; }
+    if (value.length >= len) return;
+    value += k; draw(); buzz(10);
+    if (value.length === len) { busy = true; setTimeout(() => onDone(value), 140); }
+  };
+  padEl.addEventListener("click", (e) => { const b = e.target.closest("[data-k]"); if (b) press(b.dataset.k, b); });
+  const onKey = (e) => {
+    if (padEl.offsetParent === null) return; // клавиатура скрыта
+    if (/^\d$/.test(e.key)) press(e.key, padEl.querySelector(`[data-k="${e.key}"]`));
+    else if (e.key === "Backspace") press("⌫", padEl.querySelector(`[data-k="⌫"]`));
+  };
+  document.addEventListener("keydown", onKey);
+  draw();
+  return {
+    setLength(n) { len = n || 4; value = ""; busy = false; draw(); },
+    get length() { return len; },
+    reset() { value = ""; busy = false; dotsEl.classList.remove("shake", "ok"); draw(); },
+    fail(msg) {
+      dotsEl.classList.add("shake"); buzz([40, 60, 40]);
+      if (msgEl) { msgEl.textContent = msg; msgEl.classList.add("bad"); }
+      setTimeout(() => { dotsEl.classList.remove("shake"); value = ""; busy = false; draw(); }, 520);
+    },
+    ok() { dotsEl.classList.add("ok"); buzz(20); },
+    lock(on) { padEl.querySelectorAll("button").forEach((b) => b.disabled = on); },
+  };
+}
 
 // ---------- вход ----------
-async function login(tok) {
-  TOKEN = tok.trim();
+const pad = makePad($("#pinPad"), $("#pinDots"), $("#pinMsg"), async (pin) => {
   try {
-    await api("/api/v1/ping");
-    try { localStorage.setItem("zaletToken", TOKEN); } catch (e) {}
-    $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
-    start();
+    await post("/api/home/login", { pin });
+    pad.ok(); $("#pinMsg").textContent = " "; $("#pinMsg").classList.remove("bad");
+    setTimeout(() => {
+      $("#pinWrap").classList.add("leave");
+      setTimeout(() => { $("#login").classList.add("hidden"); $("#pinWrap").classList.remove("leave"); $("#app").classList.remove("hidden"); pad.reset(); start(); }, 520);
+    }, 420);
   } catch (e) {
-    $("#loginErr").textContent = e.message || "Не получилось войти";
-    $("#login").classList.remove("hidden"); $("#app").classList.add("hidden");
+    const d = e.data || {};
+    if (d.locked) { pad.fail("Заблокировано"); lockCountdown(d.locked); }
+    else pad.fail(d.left > 0 ? `Неверный PIN · осталось попыток: ${d.left}` : "Неверный PIN");
   }
+});
+function lockCountdown(sec) {
+  pad.lock(true); clearInterval(timers.lock);
+  const m = $("#pinMsg"); m.classList.add("bad");
+  const upd = () => {
+    if (sec <= 0) { clearInterval(timers.lock); pad.lock(false); m.textContent = "Можно пробовать снова"; m.classList.remove("bad"); return; }
+    m.textContent = `Слишком много попыток · подождите ${sec >= 60 ? Math.floor(sec / 60) + " мин " : ""}${sec % 60} с`; sec--;
+  };
+  upd(); timers.lock = setInterval(upd, 1000);
 }
-function logout() {
-  try { localStorage.removeItem("zaletToken"); } catch (e) {}
-  TOKEN = ""; Object.values(timers).forEach(clearInterval);
+async function showLock() {
+  Object.entries(timers).forEach(([k, t]) => { if (k !== "toast") clearInterval(t); });
+  started = false;
   $("#app").classList.add("hidden"); $("#login").classList.remove("hidden");
+  try {
+    const info = await api("/api/home/pin-info");
+    pad.setLength(info.length || 4);
+    $("#pinTitle").textContent = info.enabled ? "ВВЕДИТЕ PIN" : "PIN НЕ ЗАДАН";
+    if (info.locked) lockCountdown(info.locked);
+  } catch (e) { $("#pinMsg").textContent = "Нет связи с роутером"; }
 }
-$("#loginBtn").onclick = () => login($("#tokenInput").value);
-$("#tokenInput").onkeydown = (e) => { if (e.key === "Enter") login($("#tokenInput").value); };
+async function logout() {
+  try { await post("/api/home/logout"); } catch (e) {}
+  showLock();
+}
 $("#logoutBtn").onclick = logout;
+
+// ---------- смена PIN ----------
+let cp = { step: 0, current: "", next: "" };
+const cpPad = makePad($("#cpPad"), $("#cpDots"), $("#cpMsg"), async (pin) => {
+  const msg = $("#cpMsg");
+  if (cp.step === 0) { cp.current = pin; cp.step = 1; setCpStep(); return; }
+  if (cp.step === 1) { cp.next = pin; cp.step = 2; setCpStep(); return; }
+  if (pin !== cp.next) { cp.step = 1; cpPad.fail("Коды не совпали — ещё раз"); setTimeout(setCpStep, 560); return; }
+  try {
+    await post("/api/home/pin", { current: cp.current, next: cp.next });
+    cpPad.ok(); msg.textContent = "PIN изменён"; msg.classList.remove("bad");
+    setTimeout(closeCp, 900); toast("PIN изменён · другие входы сброшены");
+  } catch (e) { cp.step = 0; cpPad.fail(e.message); setTimeout(setCpStep, 560); }
+});
+function setCpStep() {
+  const titles = ["ТЕКУЩИЙ PIN", "НОВЫЙ PIN", "ПОВТОРИТЕ НОВЫЙ PIN"];
+  $("#cpTitle").textContent = titles[cp.step];
+  $("#cpLen").style.display = cp.step === 1 ? "flex" : "none";
+  if (cp.step !== 2) { $("#cpMsg").textContent = cp.step === 1 ? "Выберите длину и введите новый код" : " "; $("#cpMsg").classList.remove("bad"); }
+  cpPad.setLength(cp.step === 0 ? pad.length : cp.step === 1 ? (cp.newLen || 4) : cp.next.length);
+}
+$("#cpLen").innerHTML = [4, 6, 8].map((n) => `<button data-len="${n}" class="${n === 4 ? "active" : ""}">${n} цифр${n === 4 ? "ы" : ""}</button>`).join("");
+$$("#cpLen button").forEach((b) => b.onclick = () => {
+  cp.newLen = Number(b.dataset.len); $$("#cpLen button").forEach((x) => x.classList.toggle("active", x === b)); cpPad.setLength(cp.newLen);
+});
+function openCp() { cp = { step: 0, current: "", next: "", newLen: 4 }; $$("#cpLen button").forEach((x) => x.classList.toggle("active", x.dataset.len === "4")); setCpStep(); $("#pinModal").classList.remove("hidden"); }
+function closeCp() { $("#pinModal").classList.add("hidden"); cpPad.reset(); }
+$("#pinBtn").onclick = openCp;
+$("#pinModalClose").onclick = closeCp;
+$("#pinModal").onclick = (e) => { if (e.target.id === "pinModal") closeCp(); };
 
 // ---------- навигация ----------
 function go(p) {
@@ -246,11 +340,10 @@ async function loadPhotos() {
       stat("Видео", (kinds.video?.count || 0).toLocaleString("ru-RU"), fmtBytes(kinds.video?.bytes || 0)),
       stat("Скриншоты", (kinds.screenshot?.count || 0).toLocaleString("ru-RU"), fmtBytes(kinds.screenshot?.bytes || 0)),
     ].join("");
-    const tq = encodeURIComponent(TOKEN);
     $("#thumbs").innerHTML = (items.items || []).map((it) => {
       const name = it.path.split("/").pop();
-      return `<a href="/api/v1/file?id=${encodeURIComponent(it.id)}&token=${tq}" target="_blank" title="${esc(it.path)}">
-        <img src="/api/v1/thumb?id=${encodeURIComponent(it.id)}&token=${tq}" loading="lazy" alt="" onerror="this.style.opacity=.15">
+      return `<a href="/api/v1/file?id=${encodeURIComponent(it.id)}" target="_blank" title="${esc(it.path)}">
+        <img src="/api/v1/thumb?id=${encodeURIComponent(it.id)}" loading="lazy" alt="" onerror="this.style.opacity=.15">
         <span class="cap">${esc(name)}</span></a>`;
     }).join("") || `<p class="muted">Пока пусто.</p>`;
   } catch (e) { $("#photoStats").innerHTML = `<p class="err">${esc(e.message)}</p>`; }
@@ -295,7 +388,7 @@ function renderServices() {
     <div class="links">${links.map(([t, h]) => `<a class="btn" href="${h}" target="_blank" rel="noopener">${t} ↗</a>`).join("")}</div></div>`;
   $("#services").innerHTML = [
     card("Роутер (LuCI)", true, "Все настройки OpenWrt: сеть, Wi-Fi, пакеты, брандмауэр.", "http://192.168.1.2", [["Открыть", "http://192.168.1.2"]]),
-    card("ZALET", true, "Выгрузка фото с iPhone, просмотр SSD, корзина, статистика.", "http://192.168.1.1:8099", [["Статус", "/api/v1/ping?token=" + encodeURIComponent(TOKEN)]]),
+    card("ZALET", true, "Выгрузка фото с iPhone, просмотр SSD, корзина, статистика.", "http://192.168.1.1:8099", [["Статус", "/api/v1/ping"]]),
     card("Обход блокировок", !!sv["v2raya"], "v2raya + xray: заблокированное в РФ — через Германию, остальное напрямую.", "http://192.168.1.1:2017", [["v2raya", "http://192.168.1.1:2017"]]),
     card("Сетевая папка", !!sv["smbd"], "Samba: SSD для ПК, iPhone и ТВ. Логин muall.", "\\\\192.168.1.1\\SSD · smb://192.168.1.1", []),
     card("Голосовое управление ПК", !!sv["pc-remote"], "Маруся → виртуальная розетка Tuya → роутер → Wake-on-LAN / выключение.", "", [["Tuya", "https://platform.tuya.com"]]),
@@ -308,6 +401,7 @@ function renderServices() {
 
 // ---------- запуск ----------
 function start() {
+  if (started) return; started = true;
   tick(); timers.clock = setInterval(tick, 10000);
   const p = (location.hash || "#home").slice(1);
   go(["home", "devices", "pc", "photos", "network", "logs", "services"].includes(p) ? p : "home");
@@ -318,4 +412,10 @@ function start() {
   if (!status) loadStatus();
 }
 
-if (TOKEN) login(TOKEN); else $("#login").classList.remove("hidden");
+(async () => {
+  try {
+    const info = await api("/api/home/pin-info");
+    if (info.authed) { $("#app").classList.remove("hidden"); start(); }
+    else showLock();
+  } catch (e) { showLock(); }
+})();
