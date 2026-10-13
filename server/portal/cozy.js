@@ -244,6 +244,6 @@ const COZY = [
   ["photo-1575457180622-9ca8a083c50a", "Омское лето"],
 ];
 $("#cozyStrip").innerHTML = COZY.sort(() => Math.random() - 0.5).slice(0, 5).map(([id, cap], i) =>
-  `<figure style="--d:${i * 2.4}s"><img loading="lazy" src="https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop" alt="" onload="this.classList.add('show')" onerror="this.closest('figure').remove()"><figcaption>${esc(cap)}</figcaption></figure>`).join("");
+  `<figure style="--d:${i * 2.4}s"><img loading="lazy" src="https://images.unsplash.com/${id}?w=700&q=70&auto=format&fit=crop" alt="" onload="this.classList.add('show')" onerror="this.closest('figure').remove()"></figure>`).join("");
 
 function cozyStart() { renderMood(); loadWeather(); timers.weather = setInterval(loadWeather, 15 * 60000); timers.mood = setInterval(renderMood, 60000); }
