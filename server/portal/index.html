@@ -8,10 +8,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>ZALET HOME</title>
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-title" content="ZALET HOME">
 
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="cozy.css">
+<link rel="stylesheet" href="more.css">
 </head>
 <body>
 <div class="bg-glow"></div>
@@ -54,6 +57,7 @@
       <a data-page="pc">ПК</a>
       <a data-page="photos">Фото</a>
       <a data-page="logs">Журналы</a>
+      <a data-page="auto">Автоматика</a>
       <a data-page="vault">Пароли</a>
       <a data-page="router">Роутер</a>
       <a data-page="services">Сервисы</a>
@@ -123,6 +127,13 @@
         </div>
       </div>
 
+      <div id="homeDay"></div>
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// ЛЕНТА</span> ЧТО ПРОИСХОДИЛО ДОМА</div>
+        <a class="btn btn-sm" data-page="auto">Автоматика →</a>
+      </div>
+      <div class="card events" id="homeEvents"></div>
+
       <div class="section-head">
         <div class="mono-label"><span class="acc">// 03</span> ОМСК</div>
       </div>
@@ -180,22 +191,23 @@
     <section class="page" id="page-pc">
       <div class="page-head">
         <div>
-          <div class="mono-label"><span class="acc">// 03</span> КОМПЬЮТЕР</div>
+          <div class="mono-label"><span class="acc">// 03</span> КОМПЬЮТЕРЫ</div>
           <h2 class="display">ПК</h2>
         </div>
+        <div class="head-actions"><button class="btn btn-sm btn-acc" id="agentGet">⤓ Скачать агент</button></div>
       </div>
       <div class="grid two">
         <div class="card pc-card" id="pcCard"></div>
         <div class="card">
-          <div class="mono-label">КАК УПРАВЛЯТЬ</div>
+          <div class="mono-label">ГОЛОС И ПИТАНИЕ</div>
           <ul class="list">
-            <li><b>Голосом:</b> «Маруся, включи / выключи компьютер».</li>
-            <li><b>Отсюда:</b> кнопки слева — работают дома и через Tailscale.</li>
-            <li>Выключение корректное: Windows завершает работу сама, из сна — будится и выключается.</li>
-            <li>Включение — Wake-on-LAN по кабелю.</li>
+            <li><b>Голосом:</b> «Маруся, включи / выключи компьютер» — выключает и из сна.</li>
+            <li><b>Включение</b> — Wake-on-LAN по кабелю, работает дома и через Tailscale.</li>
+            <li><b>Агент ZALET</b> на компьютере показывает состояние, делает скриншоты и выполняет команды — ниже.</li>
           </ul>
         </div>
       </div>
+      <div id="agents"></div>
     </section>
 
     <!-- ФОТО -->
@@ -207,12 +219,26 @@
         </div>
       </div>
       <div class="grid stats" id="photoStats"></div>
+      <div class="seg tabs" id="photoTabs">
+        <button data-pt="gallery" class="active">Галерея</button><button data-pt="day">В этот день</button><button data-pt="places">Места</button><button data-pt="albums">Альбомы</button><button data-pt="files">Файлы SSD</button>
+      </div>
+      <div class="ptab" id="pt-day"><div id="dayList"></div></div>
+      <div class="ptab" id="pt-places"><div class="map-wrap"><div id="placesMap"></div></div><div class="places" id="placesList"></div></div>
+      <div class="ptab" id="pt-albums"><div class="albums" id="albumsList"></div></div>
+      <div class="ptab" id="pt-files">
+        <div class="files-bar"><div class="crumbs" id="fCrumbs"></div><div class="head-actions"><button class="btn btn-sm" id="fMkdir">＋ Папка</button><label class="btn btn-sm btn-acc">⤒ Загрузить<input type="file" id="fUpload" multiple hidden></label></div></div>
+        <div class="drop" id="fDrop"><div class="files" id="fList"></div><div class="drop-hint">Отпустите файлы — они загрузятся на SSD</div></div>
+        <div class="uploads" id="fUploads"></div>
+      </div>
+      <div class="ptab active" id="pt-gallery">
       <div class="section-head">
         <div class="chips" id="galChips" style="margin:0"></div>
+        <select class="search sel" id="galYear"><option value="">Все годы</option></select>
         <span class="mono-label" id="galCount"></span>
       </div>
       <div id="gallery"></div>
       <div class="gal-more" id="galMore"><div class="spinner"></div></div>
+      </div>
     </section>
 
     <!-- РОУТЕР -->
@@ -254,6 +280,11 @@
         <div class="mono-label"><span class="acc">// WI-FI</span> ДЛЯ ГОСТЕЙ</div>
       </div>
       <div class="wifi-grid" id="wifiList"></div>
+
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// ФЛЕШКА</span> ZALET HOME В ОДИН КЛИК</div>
+      </div>
+      <div class="card usb-card" id="usbCard"></div>
     </section>
 
     <!-- ЖУРНАЛЫ -->
@@ -270,6 +301,25 @@
       </div>
       <div class="chips" id="logChips"></div>
       <div class="card log-card"><div class="log" id="log"></div></div>
+    </section>
+
+    <!-- АВТОМАТИКА -->
+    <section class="page" id="page-auto">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 06</span> ДОМ САМ ПО СЕБЕ</div>
+          <h2 class="display">АВТОМАТИКА</h2>
+        </div>
+      </div>
+      <div class="section-head"><div class="mono-label"><span class="acc">// РАСПИСАНИЯ</span> <span id="schedNow"></span></div><button class="btn btn-sm btn-acc" id="schedAdd">＋ Расписание</button></div>
+      <div class="sched" id="schedList"></div>
+      <div class="section-head"><div class="mono-label"><span class="acc">// КТО ДОМА</span> ПО ТЕЛЕФОНАМ В WI-FI</div><button class="btn btn-sm" id="personAdd">＋ Человек</button></div>
+      <div class="people" id="peopleList"></div>
+      <div class="card pres-cfg" id="presCfg"></div>
+      <div class="section-head"><div class="mono-label"><span class="acc">// TELEGRAM</span> УВЕДОМЛЕНИЯ О ДОМЕ</div></div>
+      <div class="card" id="tgCard"></div>
+      <div class="section-head"><div class="mono-label"><span class="acc">// ЛЕНТА</span> ВСЕ СОБЫТИЯ</div></div>
+      <div class="card events" id="autoEvents"></div>
     </section>
 
     <!-- ПАРОЛИ -->
@@ -305,7 +355,7 @@
   </main>
 
   <footer class="foot">
-    <span>ZALET HOME · v3.5</span>
+    <span>ZALET HOME · v3.6</span>
     <span class="foot-warm">дома тепло ♥</span>
   </footer>
 
@@ -376,5 +426,6 @@
 <script src="vault.js"></script>
 <script src="access.js"></script>
 <script src="now.js"></script>
+<script src="more.js"></script>
 </body>
 </html>

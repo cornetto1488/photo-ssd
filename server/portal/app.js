@@ -363,7 +363,7 @@ async function loadPhotos() {
 }
 
 // ---------- галерея ----------
-const gal = { kind: "", items: [], total: 0, loading: false, done: false };
+const gal = { kind: "", album: "", year: "", items: [], total: 0, loading: false, done: false };
 const GAL_KINDS = [["", "Все"], ["photo", "Фото"], ["live", "Live"], ["video", "Видео"], ["screenshot", "Скриншоты"]];
 $("#galChips").innerHTML = GAL_KINDS.map(([k, v]) => `<button class="chip ${k === "" ? "active" : ""}" data-gk="${k}">${v}</button>`).join("");
 $$("#galChips .chip").forEach((c) => c.onclick = () => { gal.kind = c.dataset.gk; $$("#galChips .chip").forEach((x) => x.classList.toggle("active", x === c)); galReset(); });
@@ -374,12 +374,14 @@ async function galMore() {
   if (gal.loading || gal.done) return;
   gal.loading = true; $("#galMore").style.display = "grid";
   try {
-    const q = `/api/v1/items?limit=120&offset=${gal.items.length}${gal.kind ? "&kind=" + gal.kind : ""}`;
+    let q = `/api/v1/items?limit=120&offset=${gal.items.length}${gal.kind ? "&kind=" + gal.kind : ""}${gal.album ? "&album=" + encodeURIComponent(gal.album) : ""}`;
+    if (gal.year) q += `&from=${Math.floor(new Date(+gal.year, 0, 1) / 1000)}&to=${Math.floor(new Date(+gal.year + 1, 0, 1) / 1000)}`;
     const r = await api(q);
     const start = gal.items.length;
     gal.items.push(...(r.items || [])); gal.total = r.total;
     if (gal.items.length >= r.total || !(r.items || []).length) gal.done = true;
-    $("#galCount").textContent = `${gal.total.toLocaleString("ru-RU")} ${plural(gal.total, "файл", "файла", "файлов")}`;
+    $("#galCount").innerHTML = `${gal.album ? `<a class="chip active" id="galAlbumX">${esc(gal.album)} ✕</a> ` : ""}${gal.total.toLocaleString("ru-RU")} ${plural(gal.total, "файл", "файла", "файлов")}`;
+    const ax = $("#galAlbumX"); if (ax) ax.onclick = () => { gal.album = ""; galReset(); };
     // дорисовываем по месяцам
     let html = "", lastKey = start > 0 ? monthKey(gal.items[start - 1]) : "";
     let grid = start > 0 ? $("#gallery .gal-grid:last-of-type") : null;
@@ -400,11 +402,12 @@ $("#gallery").addEventListener("click", (e) => { const a = e.target.closest("[da
 new IntersectionObserver((en) => { if (en[0].isIntersecting && page === "photos") galMore(); }, { rootMargin: "800px" }).observe($("#galMore"));
 
 // ---------- просмотр: листание свайпом, стрелками, клавишами ----------
-let lbIndex = -1;
+let lbIndex = -1, lbList = null; // lbList — свой список (в этот день, места), иначе галерея
+const lbItems = () => lbList || gal.items;
 function lbOpen(i) { lbIndex = i; $("#lightbox").classList.remove("hidden"); document.body.style.overflow = "hidden"; lbShow(0); }
-function lbClose() { $("#lightbox").classList.add("hidden"); document.body.style.overflow = ""; $("#lbMedia").innerHTML = ""; lbIndex = -1; }
+function lbClose() { $("#lightbox").classList.add("hidden"); document.body.style.overflow = ""; $("#lbMedia").innerHTML = ""; lbIndex = -1; lbList = null; }
 function lbShow(dir) {
-  const it = gal.items[lbIndex]; if (!it) return;
+  const it = lbItems()[lbIndex]; if (!it) return;
   const media = $("#lbMedia");
   const fill = () => {
     const url = `/api/v1/file?id=${encodeURIComponent(it.id)}`;
@@ -414,20 +417,20 @@ function lbShow(dir) {
     } else {
       // сначала превью, потом оригинал (HEIC браузеры кроме Safari не показывают — тогда остаётся превью)
       media.innerHTML = `<img src="${thumb}" alt="">`;
-      const full = new Image(); full.onload = () => { const im = media.querySelector("img"); if (im && lbIndex === gal.items.indexOf(it)) im.src = url; }; full.src = url;
+      const full = new Image(); full.onload = () => { const im = media.querySelector("img"); if (im && lbIndex === lbItems().indexOf(it)) im.src = url; }; full.src = url;
     }
     $("#lbDate").textContent = new Date((it.date || it.time) * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
     $("#lbMeta").textContent = `${it.path.split("/").pop()} · ${fmtBytes(it.size)}${it.album ? " · " + it.album : ""}`;
     $("#lbDownload").href = url; $("#lbDownload").setAttribute("download", it.path.split("/").pop());
-    $("#lbCount").textContent = `${lbIndex + 1} / ${gal.total.toLocaleString("ru-RU")}`;
+    $("#lbCount").textContent = `${lbIndex + 1} / ${(lbList ? lbList.length : gal.total).toLocaleString("ru-RU")}`;
     media.className = "lb-media";
   };
   if (dir) { media.className = "lb-media " + (dir > 0 ? "swipe-l" : "swipe-r"); setTimeout(fill, 180); } else fill();
-  if (lbIndex > gal.items.length - 20) galMore(); // подгружаем дальше заранее
+  if (!lbList && lbIndex > gal.items.length - 20) galMore(); // подгружаем дальше заранее
 }
 function lbStep(d) {
   const n = lbIndex + d;
-  if (n < 0 || n >= gal.items.length) { $("#lbMedia").animate([{ transform: "translateX(0)" }, { transform: `translateX(${d > 0 ? -18 : 18}px)` }, { transform: "translateX(0)" }], 260); return; }
+  if (n < 0 || n >= lbItems().length) { $("#lbMedia").animate([{ transform: "translateX(0)" }, { transform: `translateX(${d > 0 ? -18 : 18}px)` }, { transform: "translateX(0)" }], 260); return; }
   lbIndex = n; lbShow(d);
 }
 $("#lbClose").onclick = lbClose;
@@ -783,7 +786,7 @@ function start() {
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
-  go(["home", "devices", "pc", "photos", "network", "router", "logs", "vault", "access", "services"].includes(p) ? p : "home");
+  go(["home", "devices", "pc", "photos", "network", "router", "logs", "vault", "access", "services", "auto"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
   timers.devs = setInterval(() => { if (page === "devices") loadDevices(); }, 15000);
   timers.logs = setInterval(() => { if (page === "logs" && $("#logLive").checked) loadLogs(); }, 4000);
