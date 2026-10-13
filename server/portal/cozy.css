@@ -214,3 +214,13 @@ textarea.field { resize: vertical; min-height: 44px; line-height: 1.45; }
 .guess { color: var(--warn); cursor: help; font-weight: 700; }
 @media (max-width: 1100px) { .now-grid { grid-template-columns: 1fr 1fr; } .now-notes { grid-column: span 2; } }
 @media (max-width: 860px) { .now-grid { grid-template-columns: 1fr; } .now-notes { grid-column: auto; } .note .x { opacity: .6; } .net-rates { grid-template-columns: 1fr 1fr; } .speed-res { grid-column: span 2; text-align: left; } .speed-res .spinner { margin-left: 0; } }
+
+/* роутер */
+.router-info { margin-top: 12px; }
+.kv-list.ri { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; }
+.kv-list.ri div { align-items: center; }
+.kv-list.ri .icon-btn { width: 26px; height: 26px; font-size: 11px; flex: none; }
+.kv-list.ri b { margin-left: auto; overflow-wrap: anywhere; }
+@media (max-width: 860px) { .kv-list.ri { grid-template-columns: 1fr; } }
+#routerStats { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+@media (max-width: 860px) { #routerStats { grid-template-columns: 1fr 1fr; gap: 8px; } #routerStats .tile { min-height: 0; padding: 14px; } #routerStats .val { font-size: 22px; } }

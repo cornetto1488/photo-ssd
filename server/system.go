@@ -113,7 +113,7 @@ func wifiNets(withQR bool) []wifiNet {
 func (p *homePortal) handleSystem(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		_, err := exec.LookPath("qrencode")
-		writeJSON(w, http.StatusOK, map[string]any{"wifi": wifiNets(r.URL.Query().Get("qr") == "1"), "qr": err == nil})
+		writeJSON(w, http.StatusOK, map[string]any{"wifi": wifiNets(r.URL.Query().Get("qr") == "1"), "qr": err == nil, "router": routerInfo()})
 		return
 	}
 	var req struct {
@@ -256,4 +256,46 @@ func wttrWeather() []byte {
 	out["daily"] = d
 	b, _ := json.Marshal(out)
 	return b
+}
+
+// routerInfo — модель, прошивка, адреса.
+func routerInfo() map[string]any {
+	rel := map[string]string{}
+	for _, l := range strings.Split(readFile("/etc/openwrt_release"), "
+") {
+		if k, v, ok := strings.Cut(l, "="); ok {
+			rel[k] = strings.Trim(v, "'\"")
+		}
+	}
+	kernel, _ := exec.Command("uname", "-r").Output()
+	ifc := wanIface()
+	wanIP := ""
+	if out, err := exec.Command("ip", "-4", "-o", "addr", "show", "dev", ifc).Output(); err == nil {
+		if f := strings.Fields(string(out)); len(f) >= 4 {
+			wanIP = strings.Split(f[3], "/")[0]
+		}
+	}
+	gw := ""
+	if out, err := exec.Command("ip", "route", "show", "default").Output(); err == nil {
+		if f := strings.Fields(string(out)); len(f) >= 3 {
+			gw = f[2]
+		}
+	}
+	tsIP := ""
+	if out, err := exec.Command("tailscale", "ip", "-4").Output(); err == nil {
+		tsIP = strings.TrimSpace(string(out))
+	}
+	clients := 0
+	for _, l := range strings.Split(readFile("/tmp/dhcp.leases"), "
+") {
+		if strings.TrimSpace(l) != "" {
+			clients++
+		}
+	}
+	return map[string]any{
+		"model": readFile("/tmp/sysinfo/model"), "firmware": rel["DISTRIB_DESCRIPTION"], "target": rel["DISTRIB_TARGET"],
+		"kernel": strings.TrimSpace(string(kernel)), "hostname": readFile("/proc/sys/kernel/hostname"),
+		"wanIface": ifc, "wanIP": wanIP, "gateway": gw, "lan": "192.168.1.1 · 192.168.1.2 (LuCI)",
+		"tailscale": tsIP, "zerotier": "10.10.10.1", "leases": clients,
+	}
 }

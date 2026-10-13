@@ -53,10 +53,9 @@
       <a data-page="devices">Устройства</a>
       <a data-page="pc">ПК</a>
       <a data-page="photos">Фото</a>
-      <a data-page="network">Сеть</a>
       <a data-page="logs">Журналы</a>
       <a data-page="vault">Пароли</a>
-      <a data-page="access">Доступ</a>
+      <a data-page="router">Роутер</a>
       <a data-page="services">Сервисы</a>
     </nav>
     <div class="top-right">
@@ -75,8 +74,6 @@
           <h1 class="display"><span class="line">ДОБРО</span><span class="line">ПОЖАЛОВАТЬ</span><span class="line grad">ДОМОЙ</span></h1>
           <p class="muted" id="heroSub">Проверяю дом…</p>
           <div class="quick">
-            <button class="btn btn-acc" data-act="pc-on">⏻ Включить ПК</button>
-            <button class="btn" data-act="pc-off">Выключить ПК</button>
             <button class="btn" data-act="alloff">✦ Выключить весь свет</button>
           </div>
         </div>
@@ -218,16 +215,45 @@
       <div class="gal-more" id="galMore"><div class="spinner"></div></div>
     </section>
 
-    <!-- СЕТЬ -->
-    <section class="page" id="page-network">
+    <!-- РОУТЕР -->
+    <section class="page" id="page-router">
       <div class="page-head">
         <div>
-          <div class="mono-label"><span class="acc">// 05</span> ДОМАШНЯЯ СЕТЬ</div>
-          <h2 class="display">СЕТЬ</h2>
+          <div class="mono-label"><span class="acc">// 05</span> ROUTERICH AX3000 · OPENWRT</div>
+          <h2 class="display">РОУТЕР</h2>
         </div>
+        <div class="head-actions"><button class="btn btn-sm" data-ra="luci">⌁ LuCI</button></div>
+      </div>
+      <div class="grid stats" id="routerStats"></div>
+      <div class="router-info card" id="routerInfo"></div>
+
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// СЕТЬ</span> КТО ПОДКЛЮЧЁН</div>
         <input class="search" id="clientSearch" placeholder="Поиск по имени, IP, MAC">
       </div>
       <div class="card table-card"><table class="table" id="clients"></table></div>
+
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// ДОСТУП</span> ТОКЕН И УПРАВЛЕНИЕ</div>
+      </div>
+      <div class="grid two">
+        <div class="card" id="tokenCard"></div>
+        <div class="card" id="routerCard"></div>
+      </div>
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// SSH</span> КЛЮЧИ ДЛЯ ВХОДА НА РОУТЕР</div>
+        <div class="head-actions"><button class="btn btn-sm" id="sshAddBtn">＋ Добавить ключ</button><button class="btn btn-sm btn-acc" id="sshGenBtn">✦ Создать новый</button></div>
+      </div>
+      <div class="keys" id="sshKeys"></div>
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// ХОСТЫ</span> МОИ СЕРВЕРЫ И ПУБЛИЧНЫЕ КЛЮЧИ</div>
+        <button class="btn btn-sm" id="hostAddBtn">＋ Добавить</button>
+      </div>
+      <div class="keys" id="hosts"></div>
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// WI-FI</span> ДЛЯ ГОСТЕЙ</div>
+      </div>
+      <div class="wifi-grid" id="wifiList"></div>
     </section>
 
     <!-- ЖУРНАЛЫ -->
@@ -258,34 +284,6 @@
       <div id="vaultBody"></div>
     </section>
 
-    <!-- ДОСТУП -->
-    <section class="page" id="page-access">
-      <div class="page-head">
-        <div>
-          <div class="mono-label"><span class="acc">// 08</span> КЛЮЧИ И ВХОДЫ</div>
-          <h2 class="display">ДОСТУП</h2>
-        </div>
-      </div>
-      <div class="grid two">
-        <div class="card" id="tokenCard"></div>
-        <div class="card" id="routerCard"></div>
-      </div>
-      <div class="section-head">
-        <div class="mono-label"><span class="acc">// SSH</span> КЛЮЧИ ДЛЯ ВХОДА НА РОУТЕР</div>
-        <div class="head-actions"><button class="btn btn-sm" id="sshAddBtn">＋ Добавить ключ</button><button class="btn btn-sm btn-acc" id="sshGenBtn">✦ Создать новый</button></div>
-      </div>
-      <div class="keys" id="sshKeys"></div>
-      <div class="section-head">
-        <div class="mono-label"><span class="acc">// ХОСТЫ</span> МОИ СЕРВЕРЫ И ПУБЛИЧНЫЕ КЛЮЧИ</div>
-        <button class="btn btn-sm" id="hostAddBtn">＋ Добавить</button>
-      </div>
-      <div class="keys" id="hosts"></div>
-      <div class="section-head">
-        <div class="mono-label"><span class="acc">// WI-FI</span> ДЛЯ ГОСТЕЙ</div>
-      </div>
-      <div class="wifi-grid" id="wifiList"></div>
-    </section>
-
     <!-- СЕРВИСЫ -->
     <section class="page" id="page-services">
       <div class="page-head">
@@ -314,7 +312,7 @@
   <nav class="bottom-nav" id="bottomNav">
     <a data-page="home" class="active"><i>⌂</i>Дом</a>
     <a data-page="devices"><i>◐</i>Устройства</a>
-    <a data-page="pc"><i>⏻</i>ПК</a>
+    <a data-page="router"><i>⌁</i>Роутер</a>
     <a data-page="photos"><i>▣</i>Фото</a>
     <a data-page="vault"><i>⚿</i>Пароли</a>
     <a data-page="more"><i>⋯</i>Ещё</a>

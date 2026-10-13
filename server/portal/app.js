@@ -163,16 +163,17 @@ $("#pinModal").onclick = (e) => { if (e.target.id === "pinModal") closeCp(); };
 // ---------- навигация ----------
 function go(p) {
   if (p === "more") { openMore(); return; }
+  if (p === "network" || p === "access") p = "router";
   page = p;
   $$("[data-page]").forEach((a) => a.classList.toggle("active", a.dataset.page === p));
   $$(".page").forEach((s) => s.classList.toggle("active", s.id === "page-" + p));
   try { history.replaceState(null, "", "#" + p); } catch (e) {}
   window.scrollTo({ top: 0, behavior: "smooth" });
   cozyRun(p === "home");
-  ({ home: loadStatus, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, network: loadClients, logs: loadLogs, vault: loadVault, access: loadAccess, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
+  ({ home: loadStatus, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, router: () => { loadStatus(); loadClients(); loadAccess(); }, logs: loadLogs, vault: loadVault, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
 }
 function openMore() {
-  const items = [["logs", "Журналы"], ["network", "Сеть"], ["access", "Доступ"], ["services", "Сервисы"]];
+  const items = [["pc", "Компьютер"], ["logs", "Журналы"], ["services", "Сервисы"]];
   const pick = items.map(([k, v]) => `<button class="btn" data-go="${k}">${v}</button>`).join("");
   const t = $("#toast"); t.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${pick}</div>`; t.classList.remove("bad"); t.classList.add("show");
   t.style.pointerEvents = "auto";
@@ -208,7 +209,7 @@ function tick() {
 // ---------- статус дома ----------
 async function loadStatus() {
   try { status = await api("/api/home/status"); } catch (e) { $("#heroSub").textContent = e.message; return; }
-  renderTiles(); renderPC(); renderServices(); renderMarquee(); renderHouse(); renderLaunch(); try { renderAlerts(); } catch (e) {}
+  renderTiles(); renderPC(); try { renderRouterStats(); } catch (e) {} renderServices(); renderMarquee(); renderHouse(); renderLaunch(); try { renderAlerts(); } catch (e) {}
 }
 function tile({ label, num, val, sub, ok, bar, accent }) {
   return `<div class="tile ${accent ? "accent" : ""}">
@@ -679,7 +680,7 @@ function tilesDef() {
     { t: "Фото", s: `${(status?.photos.files || 0).toLocaleString("ru-RU")} на SSD`, i: "▣", img: mosaicShown[0] ? `/api/v1/thumb?id=${encodeURIComponent(mosaicShown[0].id)}` : IMG("st-net.jpg"), page: "photos", ok: true },
     { t: "Роутер", s: "LuCI · все настройки", i: "⌁", img: IMG("about-rack.jpg"), view: ["Роутер · LuCI", "/cgi-bin/luci/"], ok: true },
     { t: "VPN", s: "v2raya · обход блокировок", i: "⛨", img: IMG("tile-vpn.jpg"), view: ["Обход блокировок · v2raya", `http://${host}:2017`], ok: !!sv.xray },
-    { t: "Сеть", s: "кто подключён", i: "⌘", img: IMG("st-net.jpg"), page: "network", ok: true },
+    { t: "Роутер", s: "сеть, доступ, ключи", i: "⌘", img: IMG("st-net.jpg"), page: "router", ok: true },
     { t: "Tailscale", s: "удалённый доступ", i: "✶", img: IMG("tile-optic.jpg"), link: "https://login.tailscale.com/admin/machines", ok: !!sv.tailscaled },
     { t: "Журналы", s: "что происходит", i: "≡", img: IMG("tile-cross.jpg"), page: "logs", ok: true },
     { t: "ZeroTier", s: "запасной вход", i: "◇", img: IMG("tile-optic.jpg"), link: "https://my.zerotier.com/network/633e31d8a24936c0", ok: !!sv["zerotier-one"] },
@@ -782,11 +783,11 @@ function start() {
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
-  go(["home", "devices", "pc", "photos", "network", "logs", "vault", "access", "services"].includes(p) ? p : "home");
+  go(["home", "devices", "pc", "photos", "network", "router", "logs", "vault", "access", "services"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
   timers.devs = setInterval(() => { if (page === "devices") loadDevices(); }, 15000);
   timers.logs = setInterval(() => { if (page === "logs" && $("#logLive").checked) loadLogs(); }, 4000);
-  timers.clients = setInterval(() => { if (page === "network") loadClients(); }, 15000);
+  timers.clients = setInterval(() => { if (page === "router") { loadClients(); renderRouterStats(); } }, 15000);
   if (!status) loadStatus();
 }
 

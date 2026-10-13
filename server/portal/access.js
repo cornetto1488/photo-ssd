@@ -162,9 +162,37 @@ function editHost(h) {
 $("#hostAddBtn").onclick = () => editHost(null);
 
 // ---------- Wi-Fi для гостей ----------
-let wifiShown = {};
+let wifiShown = {}, sysInfo = null;
+
+// ---------- сводка о роутере ----------
+function renderRouterStats() {
+  if (!$("#routerStats")) return;
+  const s = status;
+  if (s) {
+    const r = s.router, mem = r.memTotal ? (1 - r.memAvail / r.memTotal) * 100 : 0, ssd = s.ssd.total ? (1 - s.ssd.free / s.ssd.total) * 100 : 0;
+    const st = (label, v, sub, bar) => `<div class="tile"><div class="mono-label">${label}</div><div class="val">${v}</div><div class="sub">${sub}</div>${bar === undefined ? "" : `<div class="bar"><i style="width:${Math.max(2, Math.min(100, bar))}%"></i></div>`}</div>`;
+    const on = clients.filter((c) => c.online).length;
+    $("#routerStats").innerHTML = [
+      st("Работает", fmtUptime(r.uptime).toUpperCase(), `нагрузка ${r.load}`),
+      st("Температура", r.temp ? r.temp.toFixed(0) + "°C" : "—", r.temp > 80 ? "горячо" : "норма", r.temp ? r.temp : undefined),
+      st("Память", mem.toFixed(0) + "%", `свободно ${fmtBytes(r.memAvail)}`, mem),
+      st("SSD", fmtBytes(s.ssd.free), `свободно из ${fmtBytes(s.ssd.total)}`, ssd),
+      st("Устройства", String(on), `в сети из ${clients.length}`),
+      st("Интернет", s.internet ? "В СЕТИ" : "НЕТ", vpn ? (vpn.ok ? "VPN работает" : "VPN не отвечает") : ""),
+    ].join("");
+  }
+  const i = sysInfo; if (!i) return;
+  const row = (k, v, copy) => v ? `<div><span>${k}</span><b class="mono">${esc(v)}</b>${copy ? `<button class="icon-btn" data-copy="${esc(v)}" title="Копировать">⧉</button>` : ""}</div>` : "";
+  $("#routerInfo").innerHTML = `<div class="kv-list ri">
+    ${row("Модель", i.model)}${row("Прошивка", i.firmware)}${row("Ядро", i.kernel)}${row("Имя", i.hostname)}
+    ${row("Локальная сеть", i.lan)}${row("Внешний интерфейс", `${i.wanIface} · ${i.wanIP}`)}${row("Шлюз провайдера", i.gateway)}
+    ${row("Tailscale", i.tailscale, true)}${row("ZeroTier", i.zerotier, true)}${row("Аренд DHCP", String(i.leases))}
+  </div>`;
+  $$("#routerInfo [data-copy]").forEach((b) => b.onclick = () => copyText(b.dataset.copy, "Скопировано"));
+}
 async function loadWifi() {
   let r; try { r = await api("/api/home/system?qr=1"); } catch (e) { $("#wifiList").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  sysInfo = r.router || null; renderRouterStats();
   const list = (r.wifi || []).filter((w) => !w.disabled);
   $("#wifiList").innerHTML = list.map((w, i) => `<div class="card wifi">
       <div class="wifi-qr ${wifiShown[i] ? "" : "blur"}" data-wq="${i}">${w.qr || ""}<span class="tap">${wifiShown[i] ? "" : "нажмите, чтобы показать"}</span></div>
