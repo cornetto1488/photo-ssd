@@ -200,6 +200,10 @@ func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile, tokenFile str
 	if u, err := url.Parse(proxyTo); err == nil && proxyTo != "" {
 		p.proxy = httputil.NewSingleHostReverseProxy(u)
 	}
+	go p.schedLoop()
+	go p.presenceLoop()
+	go p.vpnLoop()
+	go s.gpsLoop()
 	return p
 }
 
@@ -1086,10 +1090,22 @@ func (p *homePortal) handleLogs(w http.ResponseWriter, r *http.Request) {
 		case strings.HasSuffix(lvl, ".debug"):
 			level = "debug"
 		}
-		// photossd и samba пишут обычные сообщения в stderr (уровень err) — не пугаем красным.
-		if level == "error" && (tag == "photossd" || tag == "smbd" || tag == "nmbd") &&
-			!strings.Contains(strings.ToLower(msg), "error") && !strings.Contains(strings.ToLower(msg), "fail") {
-			level = "info"
+		// Многие службы (tailscaled, photossd, samba) пишут обычные сообщения в stderr — система помечает их
+		// как ошибки. Красным показываем только то, что по тексту действительно похоже на ошибку.
+		if level == "error" {
+			lm := strings.ToLower(msg)
+			bad := false
+			for _, k := range []string{"error", "fail", "ошибк", "не удал", "denied", "cannot", "unable", "panic", "fatal", "не отвечает", "refused", "timeout", "deadline exceeded", "could not"} {
+				if strings.Contains(lm, k) {
+					bad = true
+					break
+				}
+			}
+			if !bad {
+				level = "info"
+			} else if strings.Contains(lm, "health(") && strings.Contains(lm, "): ok") {
+				level = "info"
+			}
 		}
 		res = append(res, logLine{Time: ts, Tag: tag, Level: level, Text: msg})
 	}
@@ -1125,6 +1141,21 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/speed":        p.handleSpeed,
 		"/api/home/notes":        p.handleNotes,
 		"/api/home/backup":       p.handleBackup,
+		"/api/home/events":       p.handleEvents,
+		"/api/home/telegram":     p.handleTelegram,
+		"/api/home/schedules":    p.handleSchedules,
+		"/api/home/presence":     p.handlePresence,
+		"/api/home/pc/agent":     p.handlePCAgent,
+		"/api/home/pc/shot":      p.handlePCShot,
+		"/api/home/pc/download":  p.handleAgentDownload,
+		"/api/home/usb":          p.handleUSB,
+		"/api/home/usb/kit.zip":  p.handleUSBKit,
+		"/api/home/onthisday":    p.s.handleOnThisDay,
+		"/api/home/places":       p.s.handlePlaces,
+		"/api/home/place":        p.s.handlePlaceItems,
+		"/api/home/files":        p.s.handleFiles,
+		"/api/home/files/get":    p.s.handleFileGet,
+		"/api/home/files/upload": p.s.handleFileUpload,
 	}
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))
@@ -1133,6 +1164,9 @@ func (p *homePortal) handler() http.Handler {
 	mux.HandleFunc("/api/home/login", p.pin.handleLogin)
 	mux.HandleFunc("/api/home/logout", p.pin.handleLogout)
 	mux.HandleFunc("/api/home/pin", p.s.auth(p.pin.handleChange))
+	// агенты ПК входят по своему ключу, без PIN
+	mux.HandleFunc("/pcagent/report", p.handleAgentReport)
+	mux.HandleFunc("/pcagent/shot", p.handleAgentShot)
 	// API ZALET тоже доступно через панель (последние фото, превью).
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, r *http.Request) {
 		p.s.mux.ServeHTTP(w, r)

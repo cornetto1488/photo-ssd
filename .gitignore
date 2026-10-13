@@ -5,3 +5,5 @@ ios/*.xcodeproj/
 *.ipa
 dist/
 server/portal/fonts/
+server/portal/agent/*.exe
+server/portal/agent/zalet-agent-linux

@@ -20,12 +20,20 @@ jobs:
           curl -fsSL -o portal/fonts/Onest.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/onest/Onest%5Bwght%5D.ttf"
           curl -fsSL -o portal/fonts/Inter.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf"
           curl -fsSL -o portal/fonts/JetBrainsMono.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono%5Bwght%5D.ttf"
+          # агент ZALET для ПК (Windows и Linux) — встраивается в сервер, скачивается с сайта
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H windowsgui" -o portal/agent/zalet-agent.exe ./cmd/zalet-agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o portal/agent/zalet-agent-linux ./cmd/zalet-agent
+          GOOS=windows go vet ./cmd/zalet-agent
           go vet ./...
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../dist/photossd-linux-arm64 .
+          cp portal/agent/zalet-agent.exe portal/agent/zalet-agent-linux ../dist/
       - uses: actions/upload-artifact@v4
         with:
           name: photossd-server
-          path: dist/photossd-linux-arm64
+          path: |
+            dist/photossd-linux-arm64
+            dist/zalet-agent.exe
+            dist/zalet-agent-linux
 
   ios:
     runs-on: macos-15
