@@ -1186,6 +1186,11 @@ func (p *homePortal) handler() http.Handler {
 		}
 		if path == "/" || filepath.Ext(path) != "" {
 			w.Header().Set("Cache-Control", "no-cache")
+			// Режим разработки: файл из папки на роутере важнее зашитого в программу.
+			if f := overlayFile(path); f != "" {
+				http.ServeFile(w, r, f)
+				return
+			}
 			files.ServeHTTP(w, r)
 			return
 		}
@@ -1194,6 +1199,24 @@ func (p *homePortal) handler() http.Handler {
 		files.ServeHTTP(w, r)
 	})
 	return mux
+}
+
+// portalOverlayDir — папка для правки сайта без пересборки: что лежит в ней, отдаётся вместо зашитого в программу.
+const portalOverlayDir = "/mnt/ssd/.router/portal"
+
+func overlayFile(urlPath string) string {
+	if urlPath == "/" {
+		urlPath = "/index.html"
+	}
+	rel := strings.TrimPrefix(filepath.ToSlash(filepath.Clean("/"+urlPath)), "/")
+	if rel == "" || strings.HasPrefix(rel, ".") || strings.Contains(rel, "/.") {
+		return ""
+	}
+	f := filepath.Join(portalOverlayDir, filepath.FromSlash(rel))
+	if st, err := os.Stat(f); err == nil && !st.IsDir() {
+		return f
+	}
+	return ""
 }
 
 func (p *homePortal) listen(addrs string) {
