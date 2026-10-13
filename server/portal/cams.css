@@ -274,3 +274,68 @@
 /* просмотр фото: портретные снимки целиком, без «приближения» */
 .lb-media { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
 .lb-media img, .lb-media video { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; }
+
+/* ===== киоск ===== */
+body.kiosk-mode .top, body.kiosk-mode .bottom-nav, body.kiosk-mode .foot { display: none !important; }
+body.kiosk-mode #app { padding-left: 0 !important; }
+body.kiosk-mode main { padding: 0 !important; max-width: none !important; margin: 0 !important; }
+body.kiosk-mode { overflow: hidden; cursor: none; }
+#page-kiosk.active { position: fixed; inset: 0; z-index: 90; display: block; background: radial-gradient(80% 70% at 15% 0%, rgba(255,90,31,.16), transparent 60%), radial-gradient(70% 70% at 100% 100%, rgba(95,180,255,.10), transparent 60%), #060608; animation: none; }
+.kiosk { position: absolute; inset: 0; padding: clamp(14px, 2vw, 34px); overflow: hidden; }
+.k-drift { height: 100%; display: grid; grid-template-columns: minmax(0, 38fr) minmax(0, 62fr); grid-template-rows: minmax(0, 1fr) auto auto; gap: clamp(12px, 1.6vw, 26px); transition: transform 2.4s var(--e); }
+.k-left { display: flex; flex-direction: column; justify-content: center; gap: clamp(8px, 1.4vh, 18px); min-width: 0; }
+.k-time { font-family: var(--display); font-weight: 800; font-size: clamp(90px, 15vw, 280px); line-height: .9; letter-spacing: -.03em; background: linear-gradient(180deg, #fff, #ffb27a 70%, #ff5a1f); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.k-time i { font-style: normal; display: inline-block; transition: opacity .3s; margin: 0 .02em; }
+.k-time i.off { opacity: .25; }
+.k-date { font-size: clamp(18px, 2.2vw, 40px); font-weight: 600; color: var(--ink); text-transform: capitalize; }
+.k-weather { display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: clamp(14px, 1.5vw, 26px); }
+.k-weather b { font-family: var(--display); font-weight: 800; font-size: clamp(40px, 5vw, 90px); color: var(--ink); line-height: 1; }
+.k-weather small { font-size: .78em; opacity: .85; }
+.k-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: clamp(6px, 1.5vh, 20px); }
+.k-tile { display: flex; flex-direction: column; gap: 4px; padding: clamp(10px, 1.4vw, 20px); border-radius: 20px; border: 1px solid var(--line); background: rgba(255,255,255,.035); backdrop-filter: blur(6px); min-width: 0; }
+.k-tile.lit { border-color: rgba(255,138,76,.5); background: radial-gradient(120% 100% at 100% 0%, rgba(255,90,31,.18), transparent 60%), rgba(255,255,255,.04); }
+.k-tile span { font-family: var(--mono); font-size: clamp(10px, .9vw, 15px); color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+.k-tile b { font-family: var(--display); font-weight: 800; font-size: clamp(18px, 2.1vw, 36px); line-height: 1.1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-tile small { font-size: clamp(11px, 1vw, 16px); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-map { position: relative; border-radius: 30px; overflow: hidden; border: 1px solid var(--line-2); background: radial-gradient(90% 100% at 30% 0%, rgba(255,90,31,.12), transparent 60%), rgba(10,10,13,.8); min-height: 0; }
+.k-map canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.k-maplabel { position: absolute; left: 22px; top: 18px; font-family: var(--mono); font-size: clamp(11px, 1vw, 16px); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.k-cams { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(10px, 1.4vw, 22px); height: clamp(120px, 27vh, 340px); }
+.k-cam { position: relative; border-radius: 22px; overflow: hidden; background: #050506; border: 1px solid var(--line); }
+.k-cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.k-cam span { position: absolute; left: 14px; top: 10px; font-size: clamp(11px, 1vw, 16px); font-weight: 600; padding: 3px 10px; border-radius: 999px; background: rgba(8,8,10,.6); opacity: .0; transition: opacity .3s; }
+.k-cam em { position: absolute; inset: 0; display: grid; place-items: center; font-style: normal; color: var(--muted); font-size: 14px; }
+.k-ticker { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; min-height: 28px; font-size: clamp(13px, 1.3vw, 22px); color: var(--ink); overflow: hidden; }
+.k-ticker .k-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--live); box-shadow: 0 0 12px var(--live); flex: none; animation: camPulse 2s ease-in-out infinite; }
+.k-ticker small { color: var(--muted); font-family: var(--mono); font-size: .8em; }
+.k-ticker.swap b, .k-ticker.swap small { animation: kSwap .6s var(--e); }
+@keyframes kSwap { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.k-exit { position: absolute; right: 18px; top: 14px; width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--line-2); background: rgba(18,18,22,.8); color: var(--ink); font-size: 18px; cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .3s; z-index: 5; }
+.k-exit.show { opacity: 1; pointer-events: auto; }
+body.kiosk-mode .k-exit.show { cursor: pointer; }
+body.kiosk-mode:has(.k-exit.show) { cursor: auto; }
+/* ночью: приглушаем экран, камеры скрыты */
+body.k-night #page-kiosk .k-drift { filter: brightness(.45) saturate(.8); }
+body.k-night .k-cams { display: none; }
+/* портретный экран (планшет вертикально) */
+@media (max-aspect-ratio: 1/1) {
+  .k-drift { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr) auto auto; }
+  .k-left { justify-content: flex-start; }
+  .k-time { font-size: clamp(90px, 26vw, 220px); }
+  .k-cams { grid-template-columns: repeat(2, minmax(0, 1fr)); height: clamp(110px, 22vh, 260px); }
+  .k-cam:nth-child(3) { display: none; }
+}
+
+/* киоск: размеры считаем и по ширине, и по высоте экрана */
+.k-time { font-size: clamp(64px, min(14vw, 24vh), 280px); }
+.k-date { font-size: clamp(16px, min(2.2vw, 3.8vh), 40px); text-transform: none; }
+.k-weather { font-size: clamp(13px, min(1.5vw, 2.4vh), 26px); }
+.k-weather b { font-size: clamp(34px, min(5vw, 8.5vh), 90px); }
+.k-tile { padding: clamp(8px, min(1.4vw, 1.8vh), 20px); border-radius: 18px; }
+.k-tile b { font-size: clamp(15px, min(2.1vw, 3.4vh), 36px); }
+.k-cams { height: clamp(96px, 25vh, 340px); }
+@media (max-height: 720px) { .k-tile small, .k-weather small { display: none; } .k-left { gap: 6px; } }
+.k-time { font-size: clamp(64px, min(14vw, 21vh), 280px); }
+.k-tile { padding: clamp(7px, min(1.2vw, 1.5vh), 18px); }
+.k-tiles { gap: 8px; margin-top: 2px; }
+.k-left { overflow: hidden; }
