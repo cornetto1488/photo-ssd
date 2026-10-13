@@ -169,55 +169,81 @@ async function loadDayTab() {
 }
 
 // Места
-let placesMap = null;
+let placesMap = null, placesCluster = null, placesData = null;
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); }); }
-function loadCSS(href) { const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; document.head.appendChild(l); }
+// стили карты должны загрузиться ДО создания карты — иначе плитки и метки съезжают
+function loadCSS(href) { return new Promise((res) => { if ([...document.styleSheets].some((s) => s.href === href)) return res(); const l = document.createElement("link"); l.rel = "stylesheet"; l.href = href; l.onload = res; l.onerror = res; document.head.appendChild(l); }); }
+async function ensureLeaflet() {
+  if (window.L && L.markerClusterGroup) return;
+  await Promise.all([loadCSS("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"), loadCSS("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css")]);
+  if (!window.L) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js");
+  if (!L.markerClusterGroup) await loadScript("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js");
+}
 async function loadPlaces() {
-  $("#placesList").innerHTML = `<div class="spinner"></div>`;
-  let d; try { d = await api("/api/home/places?names=1"); } catch (e) { $("#placesList").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
-  $("#placesList").innerHTML = (d.indexing ? `<p class="muted small">Ищу координаты в фото… обработано ${d.scanned}. Места будут появляться постепенно.</p>` : "") +
-    (d.places.map((p) => `<a class="place" data-pk="${esc(p.key)}"><img loading="lazy" src="${thumb(p.cover)}" alt="" onload="this.classList.add('show')"><div><b>${esc(p.name || p.key)}</b><span>${p.count} ${plural(p.count, "снимок", "снимка", "снимков")} · ${fmtDate(p.from, { month: "short", year: "numeric" })}${p.to - p.from > 86400 * 30 ? " — " + fmtDate(p.to, { month: "short", year: "numeric" }) : ""}</span></div></a>`).join("") || `<p class="muted">Фото с координатами пока не найдены.</p>`);
-  $$("#placesList [data-pk]").forEach((a) => a.onclick = () => openPlace(a.dataset.pk, a.querySelector("b").textContent));
+  if (!placesData) $("#placesList").innerHTML = `<div class="spinner"></div>`;
+  let d; try { d = placesData = await api("/api/home/places"); } catch (e) { $("#placesList").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  const span = (p) => `${fmtDate(p.from, { month: "short", year: "numeric" })}${p.to - p.from > 86400 * 30 ? " — " + fmtDate(p.to, { month: "short", year: "numeric" }) : ""}`;
+  $("#placesList").innerHTML = (d.indexing ? `<p class="muted small places-note">Ищу координаты в фото… обработано ${d.scanned}. Места будут появляться постепенно.</p>` : "") +
+    (d.places.map((p, i) => `<a class="place" data-pl="${i}"><img loading="lazy" src="${thumb(p.cover)}" alt="" onload="this.classList.add('show')"><div><b>${esc(p.name || "Определяю место…")}</b><span>${p.count} ${plural(p.count, "снимок", "снимка", "снимков")} · ${span(p)}</span></div><i class="go-map" data-fly="${i}" title="Показать на карте">⌖</i></a>`).join("") || `<p class="muted">Фото с координатами пока не найдены.</p>`);
+  $$("#placesList [data-pl]").forEach((a) => a.onclick = (e) => {
+    const p = d.places[a.dataset.pl];
+    if (e.target.closest("[data-fly]")) { placesMap?.flyTo([p.lat, p.lon], 12, { duration: 0.8 }); $("#placesMap").scrollIntoView({ behavior: "smooth", block: "center" }); return; }
+    openPlace(p.key, p.name || "Место");
+  });
+  // названия приходят в фоне — обновим список через немного времени
+  if (d.places.some((p) => !p.name)) { clearTimeout(timers.placesNames); timers.placesNames = setTimeout(() => { if (curPhotoTab === "places" && page === "photos") loadPlaces(); }, 8000); }
   try {
-    if (!window.L) {
-      loadCSS("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css");
-      loadCSS("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.min.css");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js");
-      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js");
-    }
+    await ensureLeaflet();
     if (!placesMap) {
-      placesMap = L.map("placesMap", { zoomControl: true, attributionControl: true }).setView([55.03, 73.37], 4);
-      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "© OpenStreetMap" }).addTo(placesMap);
+      placesMap = L.map("placesMap", { zoomControl: true, worldCopyJump: true }).setView([55.03, 73.37], 5);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, subdomains: "abc", attribution: "© OpenStreetMap" }).addTo(placesMap);
     }
-    placesMap.eachLayer((l) => { if (l instanceof L.MarkerClusterGroup) placesMap.removeLayer(l); });
-    const cl = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 50 });
-    d.points.forEach((p) => {
-      const m = L.marker([p.lat, p.lon], { icon: L.divIcon({ className: "pin", html: `<img src="${thumb(p.id)}">`, iconSize: [38, 38] }) });
-      m.on("click", () => viewList([{ id: p.id, path: "", date: p.date, kind: "photo", size: 0 }], 0));
-      cl.addLayer(m);
+    // карта могла создаться в скрытой вкладке — пересчитать размер
+    requestAnimationFrame(() => placesMap.invalidateSize());
+    if (placesCluster) placesMap.removeLayer(placesCluster);
+    placesCluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 55, spiderfyOnMaxZoom: true,
+      iconCreateFunction: (c) => {
+        const ms = c.getAllChildMarkers(), cover = ms[0].options.pid;
+        return L.divIcon({ className: "pin-cluster", html: `<img src="${thumb(cover)}"><b>${c.getChildCount()}</b>`, iconSize: [48, 48], iconAnchor: [24, 24] });
+      } });
+    const pts = d.points.filter((p) => Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180 && (p.lat || p.lon));
+    pts.forEach((p, i) => {
+      const m = L.marker([p.lat, p.lon], { pid: p.id, icon: L.divIcon({ className: "pin", html: `<img src="${thumb(p.id)}" loading="lazy">`, iconSize: [40, 40], iconAnchor: [20, 20] }) });
+      m.on("click", () => { // все снимки этого места, начиная с нажатого
+        const same = pts.filter((x) => x.place === p.place);
+        viewList(same, Math.max(0, same.indexOf(p)));
+      });
+      placesCluster.addLayer(m);
     });
-    placesMap.addLayer(cl);
-    if (d.points.length) placesMap.fitBounds(cl.getBounds(), { padding: [30, 30], maxZoom: 11 });
-    setTimeout(() => placesMap.invalidateSize(), 200);
+    placesMap.addLayer(placesCluster);
+    if (pts.length && !placesMap._zaletFitted) { placesMap.fitBounds(placesCluster.getBounds(), { padding: [30, 30], maxZoom: 11 }); placesMap._zaletFitted = true; }
   } catch (e) { $("#placesMap").innerHTML = `<p class="muted small" style="padding:16px">Карта не загрузилась (нужен интернет) — список мест ниже.</p>`; }
 }
 async function openPlace(key, name) {
   const r = await api("/api/home/place?key=" + encodeURIComponent(key));
-  openForm('<span class="acc">// МЕСТО</span>', name, `<p class="muted small">${r.total} ${plural(r.total, "снимок", "снимка", "снимков")}</p><div class="gal-grid">${r.items.slice(0, 300).map((it, i) => `<a data-pi="${i}"><img loading="lazy" src="${thumb(it.id)}" alt="" onload="this.classList.add('show')"></a>`).join("")}</div>`, () => {
+  openForm('<span class="acc">// МЕСТО</span>', name, `<p class="muted small">${r.total} ${plural(r.total, "снимок", "снимка", "снимков")}</p><div class="gal-grid">${r.items.slice(0, 400).map((it, i) => `<a data-pi="${i}"><img loading="lazy" src="${thumb(it.id)}" alt="" onload="this.classList.add('show')">${it.kind === "video" ? '<span class="badge">▶</span>' : ""}</a>`).join("")}</div>`, () => {
     $$("#formBody [data-pi]").forEach((a) => a.onclick = () => { closeForm(); viewList(r.items, Number(a.dataset.pi)); });
   });
   $(".form-card").classList.add("wide");
 }
 
-// Альбомы
+// Альбомы — умные: все фото, по годам, по видам, места, альбомы приложений
+const ALBUM_SECTIONS = [["all", ""], ["year", "ПО ГОДАМ"], ["kind", "ПО ВИДУ"], ["place", "МЕСТА"], ["app", "ИЗ ПРИЛОЖЕНИЙ"]];
 async function loadAlbums() {
-  let r; try { r = await api("/api/v1/albums"); } catch (e) { return; }
-  const list = (r.albums || []).slice(0, 60);
-  $("#albumsList").innerHTML = list.map((a) => `<a class="album" data-al="${esc(a.name)}"><div class="cover" data-cover="${esc(a.name)}"></div><b>${esc(a.name)}</b><span>${a.count}</span></a>`).join("") || `<p class="muted">Альбомов нет — ZALET раскладывает по альбомам iPhone, если это включено в приложении.</p>`;
-  $$("#albumsList [data-al]").forEach((a) => a.onclick = () => { gal.album = a.dataset.al; photoTab("gallery"); galReset(); toast("Альбом: " + gal.album); });
-  for (const a of list.slice(0, 24)) {
-    try { const it = (await api(`/api/v1/items?limit=1&album=${encodeURIComponent(a.name)}`)).items?.[0]; const c = $(`[data-cover="${CSS.escape(a.name)}"]`); if (it && c) c.style.backgroundImage = `url('${thumb(it.id)}')`; } catch (e) {}
-  }
+  let r; try { r = await api("/api/home/albums"); } catch (e) { $("#albumsList").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  const list = r.albums || [];
+  $("#albumsList").innerHTML = ALBUM_SECTIONS.map(([type, title]) => {
+    const items = list.filter((a) => a.type === type); if (!items.length) return "";
+    return `${title ? `<div class="mono-label album-h">${title}</div>` : ""}<div class="albums-row ${type === "all" ? "big" : ""}">${items.map((a) =>
+      `<a class="album" data-at="${type}" data-av="${esc(a.value)}" data-an="${esc(a.name)}"><div class="cover" style="background-image:url('${thumb(a.cover)}')"></div><b>${esc(a.name)}</b><span>${a.count.toLocaleString("ru-RU")}</span></a>`).join("")}</div>`;
+  }).join("");
+  $$("#albumsList [data-at]").forEach((a) => a.onclick = () => {
+    const t = a.dataset.at, v = a.dataset.av;
+    if (t === "place") return openPlace(v, a.dataset.an);
+    gal.album = t === "app" ? v : ""; gal.kind = t === "kind" ? v : ""; gal.year = t === "year" ? v : "";
+    $("#galYear").value = gal.year; $$("#galChips .chip").forEach((x) => x.classList.toggle("active", x.dataset.gk === gal.kind));
+    photoTab("gallery"); galReset(); if (t !== "all") toast(a.dataset.an);
+  });
 }
 
 // Файлы SSD

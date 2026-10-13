@@ -166,3 +166,23 @@ body.winter .snow { display: block; }
 .nv-pop-acts .btn { padding: 7px 11px; font-size: 12px; }
 .nv-x { position: absolute; right: 10px; top: 10px; width: 26px; height: 26px; font-size: 11px; }
 @media (max-width: 860px) { .netviz { aspect-ratio: 0.92 !important; } }
+
+/* карта мест: метки — превью фото */
+.leaflet-container { background: #1a1614; font-family: var(--sans); }
+.pin, .pin-cluster { background: none; border: 0; }
+.pin img { width: 40px; height: 40px; border-radius: 11px; object-fit: cover; border: 2px solid #fff; box-shadow: 0 4px 14px rgba(0,0,0,.55); display: block; }
+.pin-cluster img { width: 48px; height: 48px; border-radius: 13px; object-fit: cover; border: 2px solid var(--acc); box-shadow: 0 6px 18px rgba(0,0,0,.6); display: block; }
+.pin-cluster b { position: absolute; right: -8px; top: -8px; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; background: var(--acc); color: #fff; font: 700 11px/24px var(--mono); text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,.5); }
+.leaflet-popup-content-wrapper, .leaflet-control-zoom a { background: var(--panel) !important; color: var(--ink) !important; border-color: var(--line-2) !important; }
+.leaflet-control-attribution { background: rgba(8,8,10,.6) !important; color: var(--muted) !important; }
+.leaflet-control-attribution a { color: var(--acc-2) !important; }
+.place { position: relative; }
+.go-map { margin-left: auto; font-style: normal; width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; border: 1px solid var(--line-2); color: var(--acc-2); flex: none; }
+.go-map:hover { border-color: var(--acc); }
+.places-note { grid-column: 1 / -1; }
+/* умные альбомы */
+#albumsList { display: block; }
+.album-h { margin: 22px 0 10px; }
+.albums-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.albums-row.big { grid-template-columns: minmax(200px, 320px); }
+.albums-row.big .cover { aspect-ratio: 16/10; }

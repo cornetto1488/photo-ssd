@@ -80,11 +80,24 @@ func exifGPS(path string) *gpsPoint {
 	buf := make([]byte, 512<<10)
 	n, _ := io.ReadFull(f, buf)
 	buf = buf[:n]
-	i := bytes.Index(buf, []byte("Exif\x00\x00"))
-	if i < 0 {
+	// В HEIC первая метка «Exif» — это имя раздела в оглавлении; сами данные — там, где после
+	// «Exif\0\0» начинается заголовок TIFF (II* или MM*). Ищем именно такое место.
+	var t []byte
+	for off := 0; ; {
+		i := bytes.Index(buf[off:], []byte("Exif\x00\x00"))
+		if i < 0 {
+			break
+		}
+		p := off + i + 6
+		if p+4 <= len(buf) && (string(buf[p:p+2]) == "II" || string(buf[p:p+2]) == "MM") {
+			t = buf[p:]
+			break
+		}
+		off = p
+	}
+	if t == nil {
 		return nil
 	}
-	t := buf[i+6:]
 	if len(t) < 8 {
 		return nil
 	}
@@ -158,6 +171,22 @@ func (s *server) gpsLoop() {
 		gpsIdx.Lock()
 		json.Unmarshal(b, &gpsIdx.pts)
 		gpsIdx.Unlock()
+	}
+	// v2: раньше координаты в HEIC не находились — один раз перечитываем HEIC без координат
+	if _, err := os.Stat(s.meta("gps.v2")); err != nil {
+		s.mu.Lock()
+		gpsIdx.Lock()
+		n := 0
+		for id, pt := range gpsIdx.pts {
+			if rec := s.byID[id]; pt == nil && rec != nil && strings.HasSuffix(strings.ToLower(rec.Path), ".heic") {
+				delete(gpsIdx.pts, id)
+				n++
+			}
+		}
+		gpsIdx.Unlock()
+		s.mu.Unlock()
+		os.WriteFile(s.meta("gps.v2"), []byte("1"), 0o644)
+		log.Printf("места съёмки: перечитываю %d фото HEIC", n)
 	}
 	for {
 		var todo []record
@@ -249,21 +278,43 @@ func (s *server) placeName(lat, lon float64) string {
 	return name
 }
 
-// GET /api/home/places — точки для карты и список мест с количеством фото.
-func (s *server) handlePlaces(w http.ResponseWriter, r *http.Request) {
-	type pt struct {
-		ID   string  `json:"id"`
-		Lat  float64 `json:"lat"`
-		Lon  float64 `json:"lon"`
-		Date int64   `json:"date"`
+// клетка ~10 км: по ней группируются места и запрашиваются названия
+func cellKey(lat, lon float64) string { return fmt.Sprintf("%.1f,%.1f", lat, lon) }
+
+var namesBusy sync.Mutex
+
+// resolveNames — в фоне узнаёт названия для клеток без названия (не тормозит страницу).
+func (s *server) resolveNames(cells []gpsPoint) {
+	if !namesBusy.TryLock() {
+		return
 	}
-	var pts []pt
-	cells := map[string]*struct {
-		Lat, Lon float64
-		N        int
-		Cover    string
-		From, To int64
-	}{}
+	defer namesBusy.Unlock()
+	for _, c := range cells {
+		s.placeName(c.Lat, c.Lon)
+	}
+}
+
+type placeOut struct {
+	Key   string  `json:"key"` // клетки через «|»
+	Name  string  `json:"name"`
+	Lat   float64 `json:"lat"`
+	Lon   float64 `json:"lon"`
+	Count int     `json:"count"`
+	Cover string  `json:"cover"`
+	From  int64   `json:"from"`
+	To    int64   `json:"to"`
+}
+
+// places — места с фото: клетки ~10 км, одинаковые названия (город) объединены.
+func (s *server) places() ([]placeOut, map[string]string, bool, int) {
+	type cell struct {
+		lat, lon float64
+		n        int
+		cover    string
+		from, to int64
+	}
+	cells := map[string]*cell{}
+	cellOf := map[string]string{} // id -> клетка
 	s.mu.Lock()
 	gpsIdx.Lock()
 	for id, g := range gpsIdx.pts {
@@ -271,76 +322,130 @@ func (s *server) handlePlaces(w http.ResponseWriter, r *http.Request) {
 		if g == nil || rec == nil || !s.live(rec) {
 			continue
 		}
-		pts = append(pts, pt{id, g.Lat, g.Lon, rec.Date})
-		key := fmt.Sprintf("%.1f,%.1f", g.Lat, g.Lon)
-		c := cells[key]
+		k := cellKey(g.Lat, g.Lon)
+		cellOf[id] = k
+		c := cells[k]
 		if c == nil {
-			c = &struct {
-				Lat, Lon float64
-				N        int
-				Cover    string
-				From, To int64
-			}{Lat: g.Lat, Lon: g.Lon, Cover: id, From: rec.Date, To: rec.Date}
-			cells[key] = c
+			c = &cell{lat: g.Lat, lon: g.Lon, cover: id, from: rec.Date, to: rec.Date}
+			cells[k] = c
 		}
-		c.N++
-		if rec.Date < c.From {
-			c.From = rec.Date
+		c.n++
+		if rec.Date < c.from {
+			c.from = rec.Date
 		}
-		if rec.Date > c.To {
-			c.To, c.Cover = rec.Date, id
+		if rec.Date > c.to {
+			c.to, c.cover = rec.Date, id
 		}
 	}
 	busy, done := gpsIdx.busy, gpsIdx.done
 	gpsIdx.Unlock()
 	s.mu.Unlock()
-	type place struct {
-		Key   string  `json:"key"`
-		Name  string  `json:"name"`
-		Lat   float64 `json:"lat"`
-		Lon   float64 `json:"lon"`
-		Count int     `json:"count"`
-		Cover string  `json:"cover"`
-		From  int64   `json:"from"`
-		To    int64   `json:"to"`
-	}
-	var places []place
-	for k, c := range cells {
-		places = append(places, place{Key: k, Lat: c.Lat, Lon: c.Lon, Count: c.N, Cover: c.Cover, From: c.From, To: c.To})
-	}
-	sort.Slice(places, func(i, j int) bool { return places[i].Count > places[j].Count })
-	if len(places) > 40 {
-		places = places[:40]
-	}
-	for i := range places {
-		if i < 25 {
-			placeNames.Lock()
-			name, ok := placeNames.m[places[i].Key]
-			placeNames.Unlock()
-			if ok {
-				places[i].Name = name
-			} else if r.URL.Query().Get("names") == "1" {
-				places[i].Name = s.placeName(places[i].Lat, places[i].Lon)
-			}
+	placeNames.Lock()
+	if len(placeNames.m) == 0 {
+		if b, err := os.ReadFile(s.meta("places.json")); err == nil {
+			json.Unmarshal(b, &placeNames.m)
 		}
 	}
-	if pts == nil {
-		pts = []pt{}
+	names := map[string]string{}
+	for k := range cells {
+		names[k] = placeNames.m[k]
 	}
-	if places == nil {
-		places = []place{}
+	placeNames.Unlock()
+	// объединяем клетки с одинаковым названием
+	merged := map[string]*placeOut{}
+	var order []string
+	keys := make([]string, 0, len(cells))
+	for k := range cells {
+		keys = append(keys, k)
 	}
+	sort.Slice(keys, func(i, j int) bool { return cells[keys[i]].n > cells[keys[j]].n })
+	for _, k := range keys {
+		c := cells[k]
+		group := names[k]
+		if group == "" {
+			group = "#" + k
+		}
+		p := merged[group]
+		if p == nil {
+			p = &placeOut{Key: k, Name: names[k], Lat: c.lat, Lon: c.lon, Cover: c.cover, From: c.from, To: c.to}
+			merged[group] = p
+			order = append(order, group)
+		} else {
+			p.Key += "|" + k
+		}
+		p.Count += c.n
+		if c.from < p.From {
+			p.From = c.from
+		}
+		if c.to > p.To {
+			p.To, p.Cover = c.to, c.cover
+		}
+	}
+	out := make([]placeOut, 0, len(order))
+	for _, g := range order {
+		out = append(out, *merged[g])
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Count > out[j].Count })
+	// названия для крупных безымянных клеток — в фоне
+	var need []gpsPoint
+	for _, k := range keys {
+		if _, ok := placeNames.m[k]; !ok && len(need) < 40 {
+			need = append(need, gpsPoint{cells[k].lat, cells[k].lon})
+		}
+	}
+	if len(need) > 0 {
+		go s.resolveNames(need)
+	}
+	return out, cellOf, busy, done
+}
+
+// GET /api/home/places — точки для карты и список мест.
+func (s *server) handlePlaces(w http.ResponseWriter, r *http.Request) {
+	places, cellOf, busy, done := s.places()
+	// какой клетке какое место
+	placeOfCell := map[string]int{}
+	for i, p := range places {
+		for _, k := range strings.Split(p.Key, "|") {
+			placeOfCell[k] = i
+		}
+	}
+	type pt struct {
+		ID    string  `json:"id"`
+		Lat   float64 `json:"lat"`
+		Lon   float64 `json:"lon"`
+		Date  int64   `json:"date"`
+		Path  string  `json:"path"`
+		Kind  string  `json:"kind"`
+		Size  int64   `json:"size"`
+		Place int     `json:"place"`
+	}
+	pts := []pt{}
+	s.mu.Lock()
+	gpsIdx.Lock()
+	for id, k := range cellOf {
+		g, rec := gpsIdx.pts[id], s.byID[id]
+		if g == nil || rec == nil {
+			continue
+		}
+		pts = append(pts, pt{id, g.Lat, g.Lon, rec.Date, rec.Path, rec.Kind, rec.Size, placeOfCell[k]})
+	}
+	gpsIdx.Unlock()
+	s.mu.Unlock()
+	sort.Slice(pts, func(i, j int) bool { return pts[i].Date > pts[j].Date })
 	writeJSON(w, http.StatusOK, map[string]any{"points": pts, "places": places, "indexing": busy, "scanned": done})
 }
 
-// GET /api/home/place?key=55.0,73.4 — фото, снятые в этом месте.
+// GET /api/home/place?key=55.0,73.4|55.0,73.3 — фото, снятые в этом месте.
 func (s *server) handlePlaceItems(w http.ResponseWriter, r *http.Request) {
-	key := r.URL.Query().Get("key")
+	want := map[string]bool{}
+	for _, k := range strings.Split(r.URL.Query().Get("key"), "|") {
+		want[k] = true
+	}
 	var list []record
 	s.mu.Lock()
 	gpsIdx.Lock()
 	for id, g := range gpsIdx.pts {
-		if g == nil || fmt.Sprintf("%.1f,%.1f", g.Lat, g.Lon) != key {
+		if g == nil || !want[cellKey(g.Lat, g.Lon)] {
 			continue
 		}
 		if rec := s.byID[id]; rec != nil && s.live(rec) {
@@ -354,6 +459,95 @@ func (s *server) handlePlaceItems(w http.ResponseWriter, r *http.Request) {
 		list = []record{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": list, "total": len(list)})
+}
+
+// GET /api/home/albums — умные альбомы: все фото, по годам, по видам, места, альбомы приложений.
+func (s *server) handleSmartAlbums(w http.ResponseWriter, r *http.Request) {
+	type album struct {
+		Type  string `json:"type"` // all, year, kind, place, app
+		Name  string `json:"name"`
+		Value string `json:"value"`
+		Count int    `json:"count"`
+		Cover string `json:"cover"`
+		Sub   string `json:"sub,omitempty"`
+	}
+	type acc struct {
+		n     int
+		cover string
+		last  int64
+	}
+	years, kinds, apps := map[string]*acc{}, map[string]*acc{}, map[string]*acc{}
+	all := &acc{}
+	add := func(m map[string]*acc, k string, rec *record, d int64) {
+		a := m[k]
+		if a == nil {
+			a = &acc{}
+			m[k] = a
+		}
+		a.n++
+		if d >= a.last {
+			a.last, a.cover = d, rec.ID
+		}
+	}
+	s.mu.Lock()
+	for _, rec := range s.byID {
+		if !s.live(rec) || rec.Kind == "livevideo" {
+			continue
+		}
+		d := rec.Date
+		if d == 0 {
+			d = rec.Time
+		}
+		if rec.Kind != "screenshot" {
+			all.n++
+			if d >= all.last {
+				all.last, all.cover = d, rec.ID
+			}
+			add(years, fmt.Sprint(time.Unix(d, 0).Year()), rec, d)
+		}
+		kind := rec.Kind
+		if kind == "" {
+			kind = "photo"
+		}
+		add(kinds, kind, rec, d)
+		if rec.Album != "" {
+			add(apps, rec.Album, rec, d)
+		}
+	}
+	s.mu.Unlock()
+	out := []album{{Type: "all", Name: "Все фото и видео", Count: all.n, Cover: all.cover}}
+	ys := make([]string, 0, len(years))
+	for y := range years {
+		ys = append(ys, y)
+	}
+	sort.Sort(sort.Reverse(sort.StringSlice(ys)))
+	for _, y := range ys {
+		if years[y].n >= 3 && y >= "2005" {
+			out = append(out, album{Type: "year", Name: y, Value: y, Count: years[y].n, Cover: years[y].cover})
+		}
+	}
+	kindNames := map[string]string{"photo": "Фото", "video": "Видео", "live": "Live Photos", "screenshot": "Скриншоты"}
+	for _, k := range []string{"video", "live", "screenshot", "photo"} {
+		if a := kinds[k]; a != nil {
+			out = append(out, album{Type: "kind", Name: kindNames[k], Value: k, Count: a.n, Cover: a.cover})
+		}
+	}
+	places, _, _, _ := s.places()
+	for i, p := range places {
+		if i >= 12 || p.Name == "" {
+			continue
+		}
+		out = append(out, album{Type: "place", Name: p.Name, Value: p.Key, Count: p.Count, Cover: p.Cover})
+	}
+	as := make([]string, 0, len(apps))
+	for a := range apps {
+		as = append(as, a)
+	}
+	sort.Slice(as, func(i, j int) bool { return apps[as[i]].n > apps[as[j]].n })
+	for _, a := range as {
+		out = append(out, album{Type: "app", Name: a, Value: a, Count: apps[a].n, Cover: apps[a].cover})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"albums": out})
 }
 
 // ---------- файлы SSD: обзор, плеер, загрузка ----------
