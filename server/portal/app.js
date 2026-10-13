@@ -625,7 +625,6 @@ function launchTile(x, idx) {
 }
 function renderLaunch() {
   const defs = tilesDef();
-  $("#launch").innerHTML = defs.slice(0, 8).map(launchTile).join("");
   $("#launchAll").innerHTML = defs.map(launchTile).join("");
   $$("[data-lt]").forEach((el) => el.onclick = () => {
     const x = defs[el.dataset.lt];

@@ -169,3 +169,35 @@
 .dr-room span { color: var(--muted); }
 .dr-room:hover { border-color: var(--acc); }
 @media (max-width: 760px) { .home-vac { grid-template-columns: 1fr; } .home-vac canvas { height: 300px; } }
+
+/* карта дома на главной (вместо камина) */
+.map-card { position: relative; border-radius: 28px; overflow: hidden; border: 1px solid var(--line-2); min-height: 340px; background: radial-gradient(90% 100% at 30% 0%, rgba(255,90,31,.14), transparent 60%), radial-gradient(70% 80% at 80% 100%, rgba(95,180,255,.08), transparent 60%), #0a0a0d; }
+.map-card canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.map-cap { position: absolute; inset: 0; padding: 20px 22px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none; }
+.map-cap button { pointer-events: auto; }
+.map-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.map-when { font-family: var(--display); font-weight: 800; font-size: 22px; margin-top: 6px; text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+.map-state { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; min-width: 150px; }
+.map-state .dr-batt { width: 150px; }
+.map-state .dr-batt b { font-size: 15px; min-width: 40px; }
+.map-bottom { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.map-btns { display: flex; gap: 8px; }
+.map-empty { margin: auto; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; pointer-events: auto; max-width: 360px; }
+.map-card .home-vac-stats b { text-shadow: 0 2px 12px rgba(0,0,0,.6); }
+@media (max-width: 860px) { .map-card { min-height: 360px; } .map-state { min-width: 0; } }
+
+/* «Дом коротко» — живые плитки */
+.ht { position: relative; overflow: hidden; border-radius: var(--radius); border: 1px solid var(--line); padding: 16px 18px; min-height: 160px; display: flex; flex-direction: column; gap: 6px; cursor: pointer; background: linear-gradient(160deg, var(--panel-2), var(--panel)); transition: .22s var(--e); }
+.ht:hover { transform: translateY(-3px); border-color: var(--line-2); box-shadow: 0 12px 30px rgba(0,0,0,.35); }
+.ht.lit { border-color: rgba(255,138,76,.45); background: radial-gradient(120% 100% at 100% 0%, rgba(255,90,31,.20), transparent 60%), linear-gradient(160deg, var(--panel-2), var(--panel)); }
+.ht.photo::before { content: ""; position: absolute; inset: 0; background: var(--bg) center/cover; opacity: .38; transition: opacity .3s var(--e); }
+.ht.photo:hover::before { opacity: .55; }
+.ht.photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8,8,10,.1), rgba(8,8,10,.85)); }
+.ht > * { position: relative; z-index: 1; }
+.ht-top { display: flex; align-items: center; gap: 10px; }
+.ht-ico { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; font-size: 17px; background: var(--bg-2); border: 1px solid var(--line-2); }
+.ht-big { font-family: var(--display); font-weight: 800; font-size: 26px; line-height: 1.12; margin-top: auto; }
+.ht-big small { font-size: 13px; font-weight: 600; color: var(--muted); }
+.ht-ev { font-size: 15px; font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.ht-sub { font-size: 12px; color: var(--muted); }
+.ht .btn { align-self: flex-start; margin-top: 6px; }

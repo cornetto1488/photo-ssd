@@ -96,13 +96,9 @@
       </div>
 
       <div class="hearth">
-        <div class="fire-card" id="fireCard">
-          <canvas id="fireCanvas"></canvas>
-          <div class="fire-cap">
-            <div class="mono-label"><span class="live-dot warm"></span> ОЧАГ · <span id="fireMood">ТЕПЛО</span></div>
-            <div class="fire-title display" id="fireTitle">У КАМИНА</div>
-            <p id="fireText">Дома тепло. Плед, чай и тихий треск поленьев.</p>
-          </div>
+        <div class="map-card" id="homeVac">
+          <canvas id="homeVacCanvas"></canvas>
+          <div class="map-cap" id="homeVacInfo"></div>
         </div>
         <div class="window-card" id="windowCard">
           <canvas id="windowCanvas"></canvas>
@@ -116,20 +112,23 @@
         </div>
       </div>
 
+      <div class="hidden" aria-hidden="true">
+        <div class="fire-card" id="fireCard">
+          <canvas id="fireCanvas"></canvas>
+          <div class="fire-cap">
+            <div class="mono-label"><span class="live-dot warm"></span> ОЧАГ · <span id="fireMood">ТЕПЛО</span></div>
+            <div class="fire-title display" id="fireTitle">У КАМИНА</div>
+            <p id="fireText">Дома тепло. Плед, чай и тихий треск поленьев.</p>
+          </div>
+        </div>
+      </div>
+
       <div class="alerts" id="alerts"></div>
       <div class="section-head home-cams-head">
         <div class="mono-label"><span class="acc">// КАМЕРЫ</span> ПРЯМОЙ ЭФИР</div>
         <button class="btn" id="homeCamsEdit">⚙ Выбрать камеры</button>
       </div>
       <div class="home-cams" id="homeCams"></div>
-      <div class="section-head hidden" id="homeVacHead">
-        <div class="mono-label"><span class="acc">// ПЫЛЕСОС</span> ПОСЛЕДНЯЯ УБОРКА</div>
-        <button class="btn" data-page="vacuum">Открыть →</button>
-      </div>
-      <div class="card home-vac hidden" id="homeVac">
-        <canvas id="homeVacCanvas"></canvas>
-        <div class="home-vac-info" id="homeVacInfo"></div>
-      </div>
       <div class="section-head">
         <div class="mono-label"><span class="acc">// 02</span> ДОМ СЕЙЧАС</div>
       </div>
@@ -163,7 +162,13 @@
       <div class="grid tiles" id="tiles"></div>
 
       <div class="section-head">
-        <div class="mono-label"><span class="acc">// 04</span> МОИ ПРОЕКТЫ</div>
+        <div class="mono-label"><span class="acc">// 04</span> ДОМ КОРОТКО</div>
+        <a class="btn btn-sm" data-page="services">Все сервисы →</a>
+      </div>
+      <div class="launch" id="launch"></div>
+
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// 06</span> МОИ ПРОЕКТЫ</div>
       </div>
       <div class="projects" id="projects">
         <a class="proj proj-cv" href="https://apodmarchuk.ru" target="_blank" rel="noopener">
@@ -182,12 +187,6 @@
           <div class="proj-foot"><span class="addr">vpnushka.lol</span><span class="go">Открыть ↗</span></div>
         </a>
       </div>
-
-      <div class="section-head">
-        <div class="mono-label"><span class="acc">// 05</span> БЫСТРЫЙ ДОСТУП</div>
-        <a class="btn btn-sm" data-page="services">Все сервисы →</a>
-      </div>
-      <div class="launch" id="launch"></div>
     </section>
 
     <!-- УСТРОЙСТВА -->
@@ -576,5 +575,6 @@
 <script src="stats.js"></script>
 <script src="dreamemap3d.js"></script>
 <script src="dreame.js"></script>
+<script src="home-tiles.js"></script>
 </body>
 </html>

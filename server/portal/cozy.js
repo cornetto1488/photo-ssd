@@ -102,7 +102,7 @@ const fire = (() => {
     ctx.fillStyle = sh; ctx.fillRect(0, 0, W * 0.6, H);
     raf = requestAnimationFrame(draw);
   }
-  function start() { resize(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
+  function start() { if (!cv.offsetParent) return; resize(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
   function stop() { cancelAnimationFrame(raf); raf = 0; }
   window.addEventListener("resize", () => { if (W) resize(); });
   return { start, stop };

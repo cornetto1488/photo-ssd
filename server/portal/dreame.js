@@ -128,24 +128,28 @@ function drLegend(c) {
 }
 $("#drMapReplay") && ($("#drMapReplay").onclick = () => drMapView && drMapView.replay());
 
-// ---- карточка на главной ----
+// ---- карта дома на главной ----
 async function homeVacStart() {
-  const card = $("#homeVac"), head = $("#homeVacHead"); if (!card) return;
+  const card = $("#homeVac"), cv = $("#homeVacCanvas"), info = $("#homeVacInfo"); if (!card) return;
   let c, st;
-  try { c = await dmLoad(); } catch (e) { card.classList.add("hidden"); head.classList.add("hidden"); return; }
+  try { c = await dmLoad(); } catch (e) {
+    info.innerHTML = '<div class="map-empty"><div class="mono-label">КАРТА ДОМА</div><h3 class="display">ПОДКЛЮЧИ ПЫЛЕСОС</h3><p class="muted">Карта квартиры появится здесь после входа в Dreamehome.</p><button class="btn btn-acc" data-page="vacuum">Подключить →</button></div>';
+    const b = $("[data-page]", info); if (b) b.onclick = () => go("vacuum");
+    return;
+  }
   try { const j = await api("/api/home/dreame"); st = j.status; } catch (e) {}
-  card.classList.remove("hidden"); head.classList.remove("hidden");
-  const cv = $("#homeVacCanvas");
   if (!homeVacView || homeVacView.cv !== cv) homeVacView = new DreameMap3D(cv, { autoRotate: true, interactive: true, labels: false });
   homeVacView.setNames(c.names); homeVacView.setData(c.map);
   const t = c.map.t ? new Date(c.map.t * 1000) : null;
   const when = t ? t.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + ", " + t.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
-  $("#homeVacInfo").innerHTML =
-    '<div class="mono-label">' + drEsc(when) + "</div>" +
-    '<div class="home-vac-stats"><div><b>' + (c.map.area || 0) + "</b><span>м² убрано</span></div><div><b>" + drHM(c.map.min) + "</b><span>в работе</span></div><div><b>" + c.map.rooms.length + "</b><span>комнат</span></div></div>" +
-    (st ? '<div class="home-vac-state"><span class="dr-pill ' + (st.state === 4 ? "bad" : DR_CLEANING.has(st.state) ? "live" : "idle") + '">' + drEsc(st.stateText) + "</span>" + drBattery(st.battery, st.charging === 1) + "</div>" : "") +
-    '<button class="btn" id="homeVacReplay">↻ Маршрут заново</button>';
+  const tone = st ? (st.state === 4 ? "bad" : DR_CLEANING.has(st.state) ? "live" : "idle") : "idle";
+  info.innerHTML =
+    '<div class="map-top"><div><div class="mono-label"><span class="live-dot"></span> КАРТА ДОМА · ПОСЛЕДНЯЯ УБОРКА</div><div class="map-when">' + drEsc(when) + "</div></div>" +
+    (st ? '<div class="map-state"><span class="dr-pill ' + tone + '">' + drEsc(st.stateText) + "</span>" + drBattery(st.battery, st.charging === 1) + "</div>" : "") + "</div>" +
+    '<div class="map-bottom"><div class="home-vac-stats"><div><b>' + (c.map.area || 0) + "</b><span>м² убрано</span></div><div><b>" + drHM(c.map.min) + "</b><span>в работе</span></div><div><b>" + c.map.rooms.length + "</b><span>комнат</span></div></div>" +
+    '<div class="map-btns"><button class="btn" id="homeVacReplay">↻ Маршрут</button><button class="btn" id="homeVacOpen">Открыть →</button></div></div>';
   $("#homeVacReplay").onclick = () => homeVacView.replay();
+  $("#homeVacOpen").onclick = () => go("vacuum");
 }
 
 const _goVac = go;
