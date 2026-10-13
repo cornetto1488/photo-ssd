@@ -9,7 +9,6 @@
 package main
 
 import (
-	"runtime"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -568,11 +567,7 @@ func runUserCmd(c command) {
 	case "lock":
 		pLockWorkStation.Call()
 	case "message":
-		// MB_ICONINFORMATION | MB_TOPMOST | MB_SETFOREGROUND: окно поверх всех и на переднем плане, на отдельном потоке
-		go func(text string) {
-			runtime.LockOSThread()
-			msgBox(text, "ZALET HOME", 0x40|0x40000|0x10000)
-		}(c.Text)
+		go showToast(c.Text)
 	case "mute":
 		key(0xAD)
 	case "volume":
