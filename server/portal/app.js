@@ -170,7 +170,8 @@ function go(p) {
   try { history.replaceState(null, "", "#" + p); } catch (e) {}
   window.scrollTo({ top: 0, behavior: "smooth" });
   cozyRun(p === "home");
-  ({ home: loadStatus, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, router: () => { loadStatus(); loadClients(); loadAccess(); }, logs: loadLogs, vault: loadVault, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
+  if (p !== "home") homeCamsStop();
+  ({ home: () => { loadStatus(); homeCamsStart(); }, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, cameras: loadCameras, router: () => { loadStatus(); loadClients(); loadAccess(); }, logs: loadLogs, vault: loadVault, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
 }
 function openMore() {
   const items = [["pc", "Компьютер"], ["logs", "Журналы"], ["services", "Сервисы"]];
@@ -702,6 +703,330 @@ function renderServicesOld() {
   ].join("");
 }
 
+// ---------- камеры Modus ----------
+// Список (порядок, имена, скрытые) хранится на роутере: /api/cameras/config. Новые каналы ищет /api/cameras/scan.
+const cams = { home: [], list: [], edit: false, loaded: false, scannedAt: 0, scanning: false, current: null, mode: "archive", busy: false };
+let camSaveTimer = null;
+const DAY = 24 * 60 * 60 * 1000;
+
+const pad2 = (n) => String(n).padStart(2, "0");
+function localDateTimeValue(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth()+1)}-${pad2(date.getDate())}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+function setCameraPeriod(startMs, endMs) {
+  if ($("#camStart")) $("#camStart").value = localDateTimeValue(new Date(startMs));
+  if ($("#camEnd")) $("#camEnd").value = localDateTimeValue(new Date(endMs));
+}
+function setCameraPeriodLastHour() { const e = Date.now(); setCameraPeriod(e - 3600e3, e); }
+function camPreset(kind) {
+  const now = new Date(), e = now.getTime();
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (kind === "15m") setCameraPeriod(e - 15 * 60e3, e);
+  else if (kind === "1h") setCameraPeriod(e - 3600e3, e);
+  else if (kind === "3h") setCameraPeriod(e - 3 * 3600e3, e);
+  else if (kind === "today") setCameraPeriod(midnight, e);
+  else if (kind === "yesterday") setCameraPeriod(midnight - DAY, midnight);
+  $$(".cam-chip").forEach((c) => c.classList.toggle("on", c.dataset.preset === kind));
+}
+const camName = (c) => (c.name && c.name.trim()) || `Камера ${c.n}`;
+
+function camsNotice(text, bad) {
+  const n = $("#camsNotice"); if (!n) return; n.textContent = text || ""; n.classList.toggle("bad", !!bad);
+}
+function camsSaveSoon() {
+  clearTimeout(camSaveTimer);
+  camSaveTimer = setTimeout(() => {
+    api("/api/cameras/config", { method: "POST", body: JSON.stringify({ cams: cams.list, scannedAt: cams.scannedAt, home: cams.home }) }).catch(() => toast("Не удалось сохранить порядок камер", true));
+  }, 500);
+}
+async function camsLoadConfig() {
+  try {
+    const j = await api("/api/cameras/config");
+    cams.list = Array.isArray(j.cams) ? j.cams.filter((c) => c && Number.isInteger(c.n)) : [];
+    cams.scannedAt = j.scannedAt || 0;
+    cams.home = Array.isArray(j.home) ? j.home.filter(Number.isInteger).slice(0, 3) : [];
+  } catch (e) { cams.list = []; }
+  cams.loaded = true;
+}
+async function camsScan(manual) {
+  if (cams.scanning) return;
+  cams.scanning = true;
+  const btn = $("#camsScan"); if (btn) { btn.disabled = true; btn.classList.add("spin"); }
+  camsNotice("Ищу камеры в Modus…");
+  try {
+    const j = await api("/api/cameras/scan");
+    const known = new Set(cams.list.map((c) => c.n));
+    const fresh = (j.cameras || []).filter((n) => !known.has(n));
+    fresh.forEach((n) => cams.list.push({ n, name: "", hidden: false }));
+    cams.scannedAt = Date.now();
+    camsSaveSoon();
+    renderCameraGrid();
+    camsNotice(fresh.length ? `Найдено новых камер: ${fresh.length} (${fresh.join(", ")}). Всего: ${cams.list.length}.` : `Новых камер нет. Всего: ${cams.list.length}.`);
+    if (fresh.length || manual) toast(fresh.length ? `+${fresh.length} камер` : "Новых камер нет");
+  } catch (e) {
+    camsNotice(`Поиск не удался: ${e.message}`, true);
+    if (/сесс|session/i.test(e.message)) camsSessionToggle(true);
+  } finally {
+    cams.scanning = false;
+    if (btn) { btn.disabled = false; btn.classList.remove("spin"); }
+  }
+}
+
+function renderCameraGrid() {
+  const grid = $("#cameraGrid"); if (!grid) return;
+  grid.classList.toggle("editing", cams.edit);
+  const items = cams.list.filter((c) => cams.edit || !c.hidden);
+  if (!items.length) {
+    grid.innerHTML = `<div class="cam-empty">Камер пока нет.<br><button class="btn btn-acc" id="camsEmptyScan">🔍 Найти камеры</button></div>`;
+    $("#camsEmptyScan").onclick = () => camsScan(true);
+    return;
+  }
+  grid.innerHTML = items.map((c) => `
+    <div class="cam-card ${c.hidden ? "is-hidden" : ""} ${cams.current === c.n ? "is-open" : ""}" data-n="${c.n}" ${cams.edit ? 'draggable="true"' : ""}>
+      <div class="cam-top">
+        <span class="cam-num">${c.n}</span>
+        <span class="cam-rec" title="Запись идёт"><i></i>REC</span>
+      </div>
+      <div class="cam-name">${esc(camName(c))}</div>
+      <div class="cam-sub">канал ${c.n}</div>
+      ${cams.edit ? `
+      <div class="cam-edit">
+        <button class="cam-mini" data-act="left" title="Раньше">◀</button>
+        <button class="cam-mini" data-act="right" title="Позже">▶</button>
+        <button class="cam-mini" data-act="rename" title="Переименовать">✎</button>
+        <button class="cam-mini" data-act="hide" title="${c.hidden ? "Показать" : "Скрыть"}">${c.hidden ? "👁" : "🚫"}</button>
+      </div>` : `
+      <div class="cam-actions">
+        <button class="btn cam-live" data-act="live">● Live</button>
+        <button class="btn" data-act="archive">Архив</button>
+      </div>`}
+    </div>`).join("");
+  $$(".cam-card", grid).forEach((card) => {
+    const n = Number(card.dataset.n);
+    card.querySelectorAll("[data-act]").forEach((b) => b.onclick = (ev) => { ev.stopPropagation(); camAction(n, b.dataset.act, b); });
+    if (cams.edit) {
+      card.ondragstart = (ev) => { ev.dataTransfer.setData("text/plain", String(n)); card.classList.add("drag"); };
+      card.ondragend = () => card.classList.remove("drag");
+      card.ondragover = (ev) => { ev.preventDefault(); card.classList.add("over"); };
+      card.ondragleave = () => card.classList.remove("over");
+      card.ondrop = (ev) => {
+        ev.preventDefault(); card.classList.remove("over");
+        const from = Number(ev.dataTransfer.getData("text/plain"));
+        camMove(from, n);
+      };
+    }
+  });
+}
+function camMove(from, toN) {
+  const a = cams.list.findIndex((c) => c.n === from), b = cams.list.findIndex((c) => c.n === toN);
+  if (a < 0 || b < 0 || a === b) return;
+  const [it] = cams.list.splice(a, 1); cams.list.splice(b, 0, it);
+  camsSaveSoon(); renderCameraGrid();
+}
+function camAction(n, act, btn) {
+  const i = cams.list.findIndex((c) => c.n === n); if (i < 0) return;
+  if (act === "live") return openCamera(n, "live", btn);
+  if (act === "archive") return openCamera(n, "archive", btn);
+  if (act === "left" && i > 0) { [cams.list[i - 1], cams.list[i]] = [cams.list[i], cams.list[i - 1]]; }
+  else if (act === "right" && i < cams.list.length - 1) { [cams.list[i + 1], cams.list[i]] = [cams.list[i], cams.list[i + 1]]; }
+  else if (act === "rename") {
+    const v = prompt(`Название камеры ${n}`, cams.list[i].name || "");
+    if (v === null) return; cams.list[i].name = v.trim().slice(0, 40);
+  } else if (act === "hide") { cams.list[i].hidden = !cams.list[i].hidden; }
+  camsSaveSoon(); renderCameraGrid();
+}
+
+// ---- Session ID ----
+async function camsSessionStatus() {
+  const box = $("#camsSessionState"); if (!box) return;
+  box.textContent = "Проверяю…"; box.className = "cam-state";
+  try {
+    const j = await api("/api/cameras/session");
+    if (!j.set) { box.textContent = "Session ID не задан"; box.className = "cam-state bad"; }
+    else if (j.valid) { box.textContent = `Сессия рабочая (${j.hint})`; box.className = "cam-state ok"; }
+    else { box.textContent = `Сессия не принята${j.error ? ": " + j.error : ""} — вставь новый`; box.className = "cam-state bad"; }
+  } catch (e) { box.textContent = e.message; box.className = "cam-state bad"; }
+}
+function camsSessionToggle(force) {
+  const p = $("#camsSession"); if (!p) return;
+  const show = force === true ? true : p.classList.contains("hidden");
+  p.classList.toggle("hidden", !show);
+  if (show) camsSessionStatus();
+}
+async function camsSessionSave() {
+  const inp = $("#camsSessionInput"), v = inp.value.trim(); if (!v) return;
+  const b = $("#camsSessionSave"); b.disabled = true; b.textContent = "Проверяю…";
+  try {
+    await post("/api/cameras/session", { session_id: v });
+    inp.value = ""; toast("Session ID сохранён");
+    await camsSessionStatus();
+    if (!cams.list.length) camsScan(false);
+  } catch (e) { toast(e.message, true); $("#camsSessionState").textContent = e.message; $("#camsSessionState").className = "cam-state bad"; }
+  finally { b.disabled = false; b.textContent = "Сохранить и проверить"; }
+}
+
+async function loadCameras() {
+  if (!cams.loaded) await camsLoadConfig();
+  const grid = $("#cameraGrid");
+  if (grid && !grid.dataset.once) { grid.dataset.once = "1"; }
+  if (!$("#camStart")?.value || !$("#camEnd")?.value) camPreset("1h");
+  renderCameraGrid();
+  // автопоиск: первый заход или раз в сутки подтягиваем новые каналы
+  if (!cams.list.length || Date.now() - cams.scannedAt > DAY) camsScan(false);
+  else camsNotice(`Камер: ${cams.list.filter((c) => !c.hidden).length}. Выбери период и нажми «Архив» или «Live».`);
+}
+
+// ---- плеер ----
+async function openCamera(camera, mode, button) {
+  if (cams.busy) return;
+  let startMs, endMs;
+  if (mode === "live") {
+    // прямой эфир идёт отдельным эндпоинтом Modus (live-url), период не нужен
+  } else {
+    startMs = $("#camStart")?.value ? new Date($("#camStart").value).getTime() : NaN;
+    endMs = $("#camEnd")?.value ? new Date($("#camEnd").value).getTime() : NaN;
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs >= endMs) { toast("Проверь начало и конец периода", true); return; }
+    if (endMs - startMs > DAY) { toast("Период не больше 24 часов", true); return; }
+  }
+  cams.busy = true;
+  const old = button?.textContent;
+  if (button) { button.disabled = true; button.textContent = "…"; }
+  camsNotice(`Подключаю камеру ${camera}…`);
+  const player = $("#cameraPlayer"), body = $("#cameraPlayerBody");
+  try {
+    const data = await post("/api/cameras/archive-url", mode === "live" ? { camera, live: true } : { camera, start_ms: startMs, end_ms: endMs });
+    cams.current = camera; cams.mode = mode;
+    const c = cams.list.find((x) => x.n === camera);
+    $("#cameraPlayerTitle").textContent = c ? camName(c) : `Камера ${camera}`;
+    $("#cameraPlayerMode").textContent = mode === "live" ? "● LIVE" : "АРХИВ";
+    $("#cameraPlayerMode").className = "cam-badge " + (mode === "live" ? "live" : "");
+    body.replaceChildren();
+    player.classList.remove("hidden");
+    if (data && data.stream && /^cam\d+$/.test(data.stream)) {
+      const base = "/api/cameras/play/api/";
+      const video = document.createElement("video");
+      video.controls = true; video.autoplay = true; video.muted = true; video.playsInline = true;
+      video.src = camVideoSrc(data.stream);
+      const spin = document.createElement("div"); spin.className = "cam-loading"; spin.textContent = "Подключаюсь к камере…";
+      video.addEventListener("playing", () => spin.remove());
+      video.addEventListener("error", () => {
+        spin.textContent = "Не удалось воспроизвести — нажми «Обновить» ещё раз. Поток H.265: нужен Safari или Chrome с аппаратным декодером.";
+        spin.classList.add("bad");
+      });
+      body.append(video, spin);
+      const d = data.data || {};
+      const fmt = (ms) => ms ? new Date(ms).toLocaleString("ru-RU") : "—";
+      $("#cameraPlayerHint").textContent = mode === "live"
+        ? "Прямой эфир с камеры. Для просмотра записи выбери период и нажми «Архив»."
+        : `Период: ${fmt(startMs)} — ${fmt(endMs)}. Архив камеры: ${fmt(d.earliest_available_ms)} — ${fmt(d.latest_available_ms)}.`;
+      camsNotice("");
+      renderCameraGrid();
+      player.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      const pre = document.createElement("pre"); pre.textContent = JSON.stringify(data, null, 2); body.appendChild(pre);
+      $("#cameraPlayerHint").textContent = "Сервер ответил, но ссылка не распознана.";
+    }
+  } catch (e) {
+    camsNotice(`Не удалось получить поток: ${e.message}`, true);
+    toast(e.message || "Ошибка", true);
+    if (/сесс|session/i.test(e.message)) camsSessionToggle(true);
+  } finally {
+    cams.busy = false;
+    if (button) { button.disabled = false; button.textContent = old; }
+  }
+}
+function camStep(dir) {
+  const vis = cams.list.filter((c) => !c.hidden); if (!vis.length || cams.current == null) return;
+  let i = vis.findIndex((c) => c.n === cams.current); i = (i + dir + vis.length) % vis.length;
+  openCamera(vis[i].n, cams.mode);
+}
+$("#camsScan") && ($("#camsScan").onclick = () => camsScan(true));
+$("#camsEditBtn") && ($("#camsEditBtn").onclick = () => {
+  cams.edit = !cams.edit;
+  $("#camsEditBtn").classList.toggle("on", cams.edit);
+  $("#camsEditBtn").textContent = cams.edit ? "✓ Готово" : "✎ Порядок";
+  renderCameraGrid();
+  if (cams.edit) camsNotice("Перетаскивай карточки (или жми ◀ ▶), ✎ — переименовать, 🚫 — скрыть.");
+  else camsNotice("");
+});
+$("#camsSessionBtn") && ($("#camsSessionBtn").onclick = () => camsSessionToggle());
+$("#camsSessionSave") && ($("#camsSessionSave").onclick = camsSessionSave);
+$("#camsSessionInput") && $("#camsSessionInput").addEventListener("keydown", (e) => { if (e.key === "Enter") camsSessionSave(); });
+$("#camLiveAll") && ($("#camLiveAll").onclick = () => { const v = cams.list.find((c) => !c.hidden); if (v) openCamera(v.n, "live"); });
+$$(".cam-chip").forEach((c) => c.onclick = () => camPreset(c.dataset.preset));
+$("#camStart") && $("#camStart").addEventListener("input", () => $$(".cam-chip").forEach((c) => c.classList.remove("on")));
+$("#camEnd") && $("#camEnd").addEventListener("input", () => $$(".cam-chip").forEach((c) => c.classList.remove("on")));
+$("#camPrev") && ($("#camPrev").onclick = () => camStep(-1));
+$("#camNext") && ($("#camNext").onclick = () => camStep(1));
+$("#camReload") && ($("#camReload").onclick = () => cams.current != null && openCamera(cams.current, cams.mode));
+$("#cameraPlayerClose") && ($("#cameraPlayerClose").onclick = () => {
+  $("#cameraPlayerBody").replaceChildren(); $("#cameraPlayer").classList.add("hidden"); cams.current = null; renderCameraGrid();
+});
+
+
+// ---------- камеры на главной (3 слота, камеры выбираются тут же) ----------
+// Safari/iPhone играют HLS, остальные — fMP4 (в Chrome «нативный» HLS есть, но он капризнее).
+function camVideoSrc(stream) {
+  const ua = navigator.userAgent;
+  const apple = /iPhone|iPad|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|Chromium|Android|Edg/.test(ua));
+  const base = "/api/cameras/play/api/";
+  return apple ? `${base}stream.m3u8?src=${stream}&mp4` : `${base}stream.mp4?src=${stream}`;
+}
+const homeCams = { gen: 0, edit: false };
+function homeCamsStop() {
+  homeCams.gen++;
+  const box = $("#homeCams"); if (box) box.querySelectorAll("video").forEach((v) => { v.removeAttribute("src"); v.load(); });
+}
+function homeCamsIds() {
+  const vis = cams.list.filter((c) => !c.hidden).map((c) => c.n);
+  const ids = cams.home.filter((n) => vis.includes(n));
+  for (const n of vis) { if (ids.length >= 3) break; if (!ids.includes(n)) ids.push(n); }
+  return ids.slice(0, 3);
+}
+async function homeCamsStart() {
+  const box = $("#homeCams"); if (!box) return;
+  if (!cams.loaded) await camsLoadConfig();
+  if (!cams.list.length) { box.innerHTML = `<div class="cam-empty">Камеры ещё не найдены.<br><button class="btn btn-acc" id="homeCamsFind">🔍 Найти камеры</button></div>`; $("#homeCamsFind").onclick = async () => { await camsScan(true); homeCamsStart(); }; return; }
+  const gen = ++homeCams.gen;
+  const ids = homeCamsIds();
+  const opts = cams.list.filter((c) => !c.hidden).map((c) => `<option value="${c.n}">${esc(camName(c))}</option>`).join("");
+  box.classList.toggle("editing", homeCams.edit);
+  box.innerHTML = ids.map((n, i) => {
+    const c = cams.list.find((x) => x.n === n);
+    return `<div class="home-cam" data-slot="${i}" data-n="${n}">
+      <video muted autoplay playsinline></video>
+      <div class="home-cam-bar"><span class="cam-badge live">● LIVE</span><b>${esc(camName(c))}</b></div>
+      <div class="home-cam-msg">Подключаюсь…</div>
+      <select class="home-cam-pick">${opts}</select>
+    </div>`;
+  }).join("");
+  box.querySelectorAll(".home-cam").forEach((tile, i) => {
+    const n = Number(tile.dataset.n);
+    const sel = $("select", tile); sel.value = String(n);
+    sel.onchange = () => { const arr = homeCamsIds(); arr[i] = Number(sel.value); cams.home = arr; camsSaveSoon(); homeCamsStart(); };
+    tile.onclick = (e) => { if (homeCams.edit || e.target.closest("select")) return; go("cameras"); openCamera(n, "live"); };
+    setTimeout(() => { if (gen === homeCams.gen) homeCamStream(tile, n, gen); }, i * 600);
+  });
+}
+async function homeCamStream(tile, n, gen) {
+  const msg = $(".home-cam-msg", tile), v = $("video", tile);
+  try {
+    const d = await post("/api/cameras/archive-url", { camera: n, slot: "h", live: true });
+    if (gen !== homeCams.gen || !d.stream) return;
+    v.addEventListener("playing", () => msg.classList.add("hidden"), { once: true });
+    v.addEventListener("error", () => { msg.textContent = "Нет сигнала · нажми, чтобы открыть"; msg.classList.remove("hidden"); }, { once: true });
+    v.src = camVideoSrc(d.stream);
+  } catch (e) { msg.textContent = e.message; }
+}
+$("#homeCamsEdit") && ($("#homeCamsEdit").onclick = () => {
+  homeCams.edit = !homeCams.edit;
+  $("#homeCamsEdit").textContent = homeCams.edit ? "✓ Готово" : "⚙ Выбрать камеры";
+  $("#homeCams").classList.toggle("editing", homeCams.edit);
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) homeCamsStop(); else if (page === "home" && started) homeCamsStart();
+});
+
 // ---------- запуск ----------
 function start() {
   if (started) return; started = true;
@@ -711,7 +1036,7 @@ function start() {
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
-  go(["home", "devices", "pc", "photos", "network", "router", "logs", "vault", "access", "services"].includes(p) ? p : "home");
+  go(["home", "devices", "pc", "photos", "cameras", "network", "router", "logs", "vault", "access", "services"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
   timers.devs = setInterval(() => { if (page === "devices") loadDevices(); }, 15000);
   timers.logs = setInterval(() => { if (page === "logs" && $("#logLive").checked) loadLogs(); }, 4000);

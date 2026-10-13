@@ -15,6 +15,10 @@
 <link rel="stylesheet" href="app.css">
 <link rel="stylesheet" href="cozy.css">
 <link rel="stylesheet" href="more.css">
+<link rel="stylesheet" href="cams.css">
+<style>
+</style>
+
 </head>
 <body>
 <div class="bg-glow"></div>
@@ -56,6 +60,7 @@
       <a data-page="devices">Устройства</a>
       <a data-page="pc">ПК</a>
       <a data-page="photos">Фото</a>
+      <a data-page="cameras">Камеры</a>
       <a data-page="logs">Журналы</a>
       <a data-page="vault">Пароли</a>
       <a data-page="router">Роутер</a>
@@ -110,6 +115,11 @@
       </div>
 
       <div class="alerts" id="alerts"></div>
+      <div class="section-head home-cams-head">
+        <div class="mono-label"><span class="acc">// КАМЕРЫ</span> ПРЯМОЙ ЭФИР</div>
+        <button class="btn" id="homeCamsEdit">⚙ Выбрать камеры</button>
+      </div>
+      <div class="home-cams" id="homeCams"></div>
       <div class="section-head">
         <div class="mono-label"><span class="acc">// 02</span> ДОМ СЕЙЧАС</div>
       </div>
@@ -285,6 +295,62 @@
         <div class="mono-label"><span class="acc">// ФЛЕШКА</span> ZALET HOME В ОДИН КЛИК</div>
       </div>
       <div class="card usb-card" id="usbCard"></div>
+    </section>
+
+    <!-- КАМЕРЫ MODUS -->
+    <section class="page" id="page-cameras">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 05</span> MODUS · LIVE И АРХИВ</div>
+          <h2 class="display">КАМЕРЫ</h2>
+        </div>
+        <div class="head-actions cam-tools">
+          <button class="btn" id="camsScan" title="Найти новые камеры и добавить автоматически">🔍 Найти камеры</button>
+          <button class="btn" id="camsEditBtn">✎ Порядок</button>
+          <button class="btn" id="camsSessionBtn">🔑 Сессия</button>
+        </div>
+      </div>
+
+      <div class="card cam-session hidden" id="camsSession">
+        <div class="mono-label">SESSION ID MODUS</div>
+        <p class="muted small">Если камеры перестали открываться — сессия протухла. Вставь новый session_id (значение cookie <code>session_id</code> из Modus). Он проверяется и сохраняется на роутере, в браузере не хранится.</p>
+        <div class="cam-state" id="camsSessionState"></div>
+        <div class="cam-session-row">
+          <input class="field mono" id="camsSessionInput" type="password" autocomplete="off" spellcheck="false" placeholder="session_id…">
+          <button class="btn btn-acc" id="camsSessionSave">Сохранить и проверить</button>
+        </div>
+      </div>
+
+      <div class="card cam-player hidden" id="cameraPlayer">
+        <div class="head-row cam-player-head">
+          <div><div class="cam-badge" id="cameraPlayerMode">АРХИВ</div><h3 id="cameraPlayerTitle">Камера</h3></div>
+          <div class="cam-player-btns">
+            <button class="icon-btn" id="camPrev" title="Предыдущая камера">◀</button>
+            <button class="icon-btn" id="camNext" title="Следующая камера">▶</button>
+            <button class="icon-btn" id="camReload" title="Переподключить">↻</button>
+            <button class="icon-btn" id="cameraPlayerClose" title="Закрыть">✕</button>
+          </div>
+        </div>
+        <div id="cameraPlayerBody" class="cam-player-body"></div>
+        <p class="muted small" id="cameraPlayerHint"></p>
+      </div>
+
+      <div class="card cam-controls">
+        <div class="cam-chips">
+          <button class="cam-chip" data-preset="15m">15 мин</button>
+          <button class="cam-chip on" data-preset="1h">1 час</button>
+          <button class="cam-chip" data-preset="3h">3 часа</button>
+          <button class="cam-chip" data-preset="today">Сегодня</button>
+          <button class="cam-chip" data-preset="yesterday">Вчера</button>
+        </div>
+        <div class="cam-period">
+          <label>Начало<input class="field" id="camStart" type="datetime-local"></label>
+          <label>Конец<input class="field" id="camEnd" type="datetime-local"></label>
+        </div>
+      </div>
+      <div class="modus-notice" id="camsNotice" role="status"></div>
+      <div class="cam-grid" id="cameraGrid"></div>
+
     </section>
 
     <!-- ЖУРНАЛЫ -->
