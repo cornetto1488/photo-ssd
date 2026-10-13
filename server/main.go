@@ -84,6 +84,7 @@ type server struct {
 func main() {
 	// обычные сообщения — в stdout (в журнале это info), иначе procd помечает всё как ошибки
 	log.SetOutput(os.Stdout)
+	setLocalZone()
 	listen := flag.String("listen", ":8099", "адрес для прослушивания")
 	root := flag.String("root", "/mnt/ssd/Photos", "корневая папка для фото")
 	tokenFile := flag.String("token-file", "/etc/photossd.token", "файл с токеном доступа")

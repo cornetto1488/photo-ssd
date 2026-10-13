@@ -156,7 +156,7 @@ async function loadHomeDay() {
   const d = await getDay(); const el = $("#homeDay");
   if (!d.days.length) { el.innerHTML = ""; return; }
   const all = d.days.flatMap((g) => g.items.map((it) => ({ ...it, _ago: g.ago })));
-  el.innerHTML = `<div class="section-head"><div class="mono-label"><span class="acc">// ПАМЯТЬ</span> В ЭТОТ ДЕНЬ · ${esc(d.date.toUpperCase())}</div><a class="btn btn-sm" href="#" id="dayAll">Все →</a></div>
+  el.innerHTML = `<div class="section-head"><div class="mono-label"><span class="acc">// ПАМЯТЬ</span> В ЭТОТ ДЕНЬ · ${esc(new Date().toLocaleDateString("ru-RU", { day: "numeric", month: "long" }).toUpperCase())}</div><a class="btn btn-sm" href="#" id="dayAll">Все →</a></div>
     <div class="day-strip">${all.slice(0, 14).map((it, i) => `<a data-di="${i}"><img loading="lazy" src="${thumb(it.id)}" alt="" onload="this.classList.add('show')"><span>${it._ago} ${plural(it._ago, "год", "года", "лет")} назад</span></a>`).join("")}</div>`;
   $$("#homeDay [data-di]").forEach((a) => a.onclick = () => viewList(all, Number(a.dataset.di)));
   $("#dayAll").onclick = (e) => { e.preventDefault(); go("photos"); photoTab("day"); };
