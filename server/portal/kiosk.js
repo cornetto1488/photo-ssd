@@ -15,8 +15,8 @@ function kioskBuild() {
         <div class="k-date" id="kDate"></div>
         <div class="k-weather" id="kWeather"></div>
         <div class="k-light" id="kLight">
-          <div class="k-light-head"><span class="k-lab">💡 СВЕТ <em id="kLightMsg"></em></span>
-            <div class="k-light-all"><button class="k-btn on" data-kl="on">☀ Включить всё</button><button class="k-btn off" data-kl="off">🌙 Выключить всё</button></div></div>
+          <div class="k-light-head"><span class="k-lab">СВЕТ <b id="kLightCount"></b></span><em class="k-msg" id="kLightMsg"></em></div>
+          <div class="k-light-all"><button class="k-btn on" data-kl="on">${K_ICON.sun}<span>Включить всё</span></button><button class="k-btn off" data-kl="off">${K_ICON.moon}<span>Выключить всё</span></button></div>
           <div class="k-rooms" id="kRooms"></div>
         </div>
         <div class="k-tiles" id="kTiles"></div>
@@ -91,6 +91,11 @@ async function kioskTicker() {
 }
 
 // ---- свет: всё сразу и по комнатам ----
+const K_ICON = {
+  sun: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8"/></svg>',
+  moon: '<svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5z"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>',
+};
 const kLampOn = (d) => d.kind === "light" ? !!kVal(d, "switch_led") : !!kVal(d, "switch_1");
 const kVal = (d, code) => { const s = (d.status || []).find((x) => x.code === code); return s ? s.value : undefined; };
 function kRoomsMap() {
@@ -105,16 +110,37 @@ async function kioskDevices(fresh) {
 function kioskRenderRooms() {
   const box = $("#kRooms"); if (!box) return;
   const rooms = kRoomsMap();
+  let totalOn = 0, totalAll = 0;
   box.innerHTML = rooms.map((r) => {
     const lampsOn = r.lights.filter(kLampOn).length, swOn = r.switches.some(kLampOn);
     const on = lampsOn > 0 || (!r.lights.length && swOn);
-    const sub = r.lights.length ? lampsOn + " из " + r.lights.length : (swOn ? "включён" : "выключен");
-    return '<button class="k-room' + (on ? " on" : "") + '" data-room="' + kEsc(r.name) + '"><b>' + kEsc(r.name) + "</b><small>" + sub + "</small></button>";
+    totalAll += r.lights.length || r.switches.length; totalOn += r.lights.length ? lampsOn : (swOn ? r.switches.length : 0);
+    const sub = r.lights.length ? (lampsOn ? lampsOn + " из " + r.lights.length : "выключено") : (swOn ? "включено" : "выключено");
+    return '<button class="k-room' + (on ? " on" : "") + '" data-room="' + kEsc(r.name) + '"><i class="k-ri">' + K_ICON.bulb + '</i><span class="k-rn">' + kEsc(r.name) + '</span><span class="k-rs">' + sub + "</span></button>";
   }).join("") || '<span class="muted">Устройства света не найдены</span>';
+  const c = $("#kLightCount"); if (c) c.textContent = totalAll ? "· " + totalOn + " из " + totalAll : "";
+  kioskLayoutRooms();
   $$("[data-room]", box).forEach((b) => b.onclick = () => {
     const r = rooms.find((x) => x.name === b.dataset.room); if (!r) return;
     const on = !(r.lights.some(kLampOn) || (!r.lights.length && r.switches.some(kLampOn)));
-    kioskPower(rooms.filter((x) => x === r), on, r.name + (on ? ": включаю…" : ": выключаю…"));
+    kioskPower([r], on, r.name + (on ? ": включаю…" : ": выключаю…"));
+  });
+}
+// ровная сетка без «сирот»: число колонок подбирается так, чтобы строки были одинаковыми, неполная последняя строка центрируется
+function kioskLayoutRooms() {
+  const box = $("#kRooms"); if (!box) return;
+  const tiles = $$(".k-room", box), n = tiles.length; if (!n) return;
+  const gap = 10, minW = 150, maxCols = Math.max(1, Math.floor((box.clientWidth + gap) / (minW + gap)));
+  let cols = Math.min(n, maxCols);
+  if (n > cols) { // ищем делитель n, чтобы все строки были полными; иначе — равномерные строки
+    let best = 0; for (let c = Math.min(maxCols, n); c >= 2; c--) if (n % c === 0) { best = c; break; }
+    cols = best || Math.ceil(n / Math.ceil(n / maxCols));
+  }
+  box.style.gridTemplateColumns = "repeat(" + cols * 2 + ", minmax(0, 1fr))";
+  const rem = n % cols;
+  tiles.forEach((t, i) => {
+    t.style.gridColumnEnd = "span 2";
+    t.style.gridColumnStart = rem && i === n - rem ? String(cols - rem + 1) : "auto"; // неполная последняя строка — по центру
   });
 }
 async function kioskPower(rooms, on, msg) {
@@ -144,6 +170,7 @@ async function kioskPower(rooms, on, msg) {
     kioskRenderRooms(); setTimeout(() => kioskDevices(true), 2500);
   }
 }
+window.addEventListener("resize", () => { if (kk.on) kioskLayoutRooms(); });
 function kioskLightBind() {
   $$("[data-kl]", $("#kLight")).forEach((b) => b.onclick = async () => {
     const on = b.dataset.kl === "on";
