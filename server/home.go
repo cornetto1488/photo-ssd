@@ -1171,6 +1171,8 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/dreame/cmd":     p.handleDreameCmd,
 		"/api/home/dreame/history": p.handleDreameHistory,
 		"/api/home/dreame/mapraw":  p.handleDreameMapRaw,
+		"/api/home/dreame/map":     p.handleDreameMap,
+		"/api/home/dreame/rooms":   p.handleDreameRooms,
 		"/api/cameras/scan":         homeCameraScan,
 		"/api/cameras/config":       homeCameraConfig,
 		"/api/cameras/session":      homeCameraSession,
