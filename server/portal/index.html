@@ -61,6 +61,7 @@
       <a data-page="pc">ПК</a>
       <a data-page="photos">Фото</a>
       <a data-page="cameras">Камеры</a>
+      <a data-page="vacuum">Пылесос</a>
       <a data-page="stats">Статистика</a>
       <a data-page="logs">Журналы</a>
       <a data-page="vault">Пароли</a>
@@ -396,6 +397,40 @@
       </div>
     </section>
 
+    <!-- ПЫЛЕСОС -->
+    <section class="page" id="page-vacuum">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 08</span> DREAME · УБОРКА</div>
+          <h2 class="display">ПЫЛЕСОС</h2>
+        </div>
+        <div class="head-actions"><button class="btn hidden" id="drLogout">Отключить аккаунт</button></div>
+      </div>
+
+      <div class="card dr-login hidden" id="drLogin">
+        <div class="mono-label">ВХОД В DREAMEHOME</div>
+        <p class="muted small">Логин и пароль от приложения Dreamehome. Они вводятся один раз, пароль хранится на роутере только в виде хеша, в браузере и чатах не остаётся.</p>
+        <form class="form" id="drForm">
+          <label>Почта или телефон<input class="field" id="drUser" autocomplete="off" placeholder="name@mail.ru"></label>
+          <label>Пароль<input class="field" id="drPass" type="password" autocomplete="off"></label>
+          <label>Регион аккаунта<select class="field" id="drCountry"><option value="ru">Россия</option><option value="eu">Европа</option><option value="cn">Китай</option><option value="us">США</option><option value="sg">Сингапур</option></select></label>
+          <button class="btn btn-acc" id="drLoginBtn">Подключить</button>
+        </form>
+      </div>
+
+      <div id="drMain" class="hidden">
+        <div class="card dr-hero" id="drHero"></div>
+        <div class="dr-actions" id="drActions"></div>
+        <div class="st-cards" id="drCards"></div>
+        <div class="section-head"><div class="mono-label"><span class="acc">//</span> РАСХОДНИКИ</div></div>
+        <div class="card" id="drCons"></div>
+        <div class="section-head"><div class="mono-label"><span class="acc">//</span> ИСТОРИЯ УБОРОК</div></div>
+        <div class="card st-card"><div class="mono-label">УБРАНО, М² ЗА УБОРКУ</div><div id="drHistChart"></div></div>
+        <div class="st-list" id="drHist"></div>
+      </div>
+      <div class="modus-notice" id="drNotice"></div>
+    </section>
+
     <!-- ЖУРНАЛЫ -->
     <section class="page" id="page-logs">
       <div class="page-head">
@@ -524,5 +559,6 @@
 <script src="now.js"></script>
 <script src="more.js"></script>
 <script src="stats.js"></script>
+<script src="dreame.js"></script>
 </body>
 </html>

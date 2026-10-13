@@ -1165,6 +1165,11 @@ func (p *homePortal) handler() http.Handler {
 		"/api/cameras/play/":       homeCameraPlay,    // видео через go2rtc (modus.go)
 		"/api/home/stats/lights": p.handleStatsLights,
 		"/api/home/stats/net":    p.handleStatsNet,
+		"/api/home/dreame":         p.handleDreame,
+		"/api/home/dreame/login":   p.handleDreameLogin,
+		"/api/home/dreame/logout":  p.handleDreameLogout,
+		"/api/home/dreame/cmd":     p.handleDreameCmd,
+		"/api/home/dreame/history": p.handleDreameHistory,
 		"/api/cameras/scan":         homeCameraScan,
 		"/api/cameras/config":       homeCameraConfig,
 		"/api/cameras/session":      homeCameraSession,

@@ -174,7 +174,7 @@ function go(p) {
   ({ home: () => { loadStatus(); homeCamsStart(); }, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, cameras: loadCameras, router: () => { loadStatus(); loadClients(); loadAccess(); }, logs: loadLogs, vault: loadVault, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
 }
 function openMore() {
-  const items = [["stats", "Статистика"], ["pc", "Компьютер"], ["logs", "Журналы"], ["services", "Сервисы"]];
+  const items = [["vacuum", "Пылесос"], ["stats", "Статистика"], ["pc", "Компьютер"], ["logs", "Журналы"], ["services", "Сервисы"]];
   const pick = items.map(([k, v]) => `<button class="btn" data-go="${k}">${v}</button>`).join("");
   const t = $("#toast"); t.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${pick}</div>`; t.classList.remove("bad"); t.classList.add("show");
   t.style.pointerEvents = "auto";
@@ -1082,7 +1082,7 @@ function start() {
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
-  go(["home", "devices", "pc", "photos", "cameras", "network", "router", "logs", "vault", "access", "services", "stats"].includes(p) ? p : "home");
+  go(["home", "devices", "pc", "photos", "cameras", "network", "router", "logs", "vault", "access", "services", "stats", "vacuum"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
   timers.devs = setInterval(() => { if (page === "devices") loadDevices(); }, 15000);
   timers.logs = setInterval(() => { if (page === "logs" && $("#logLive").checked) loadLogs(); }, 4000);
