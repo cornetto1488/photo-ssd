@@ -491,11 +491,15 @@ func (p *homePortal) handleDreameLogout(w http.ResponseWriter, r *http.Request) 
 // POST /api/home/dreame/cmd {action: start|pause|stop|dock|locate}
 func (p *homePortal) handleDreameCmd(w http.ResponseWriter, r *http.Request) {
 	dreameLoad()
-	var q struct{ Action string }
-	json.NewDecoder(io.LimitReader(r.Body, 1024)).Decode(&q)
+	var q struct {
+		Action string
+		Rooms  []int
+		Repeat int
+	}
+	json.NewDecoder(io.LimitReader(r.Body, 2048)).Decode(&q)
 	acts := map[string][2]int{"start": {2, 1}, "pause": {2, 2}, "dock": {3, 1}, "stop": {4, 2}, "locate": {7, 1}}
 	a, ok := acts[q.Action]
-	if !ok {
+	if !ok && q.Action != "rooms" {
 		fail(w, http.StatusBadRequest, "неизвестная команда")
 		return
 	}
@@ -510,13 +514,47 @@ func (p *homePortal) handleDreameCmd(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	res, err := c.send("action", map[string]any{"did": c.did, "siid": a[0], "aiid": a[1], "in": []any{}})
+	var res any
+	var err error
+	if q.Action == "rooms" {
+		// уборка выбранных комнат: действие 4.1 со статусом 18 (SEGMENT_CLEANING) и списком [комната, повторы, всасывание, вода, порядок]
+		if len(q.Rooms) == 0 || len(q.Rooms) > 30 {
+			fail(w, http.StatusBadRequest, "выбери комнаты")
+			return
+		}
+		suction, water := 2, 2
+		if st, e := c.fetchStatus(); e == nil {
+			if v := num(st["suction"]); v >= 0 {
+				suction = v
+			}
+			if v := num(st["water"]); v >= 0 {
+				water = v
+			}
+		}
+		rep := q.Repeat
+		if rep < 1 || rep > 3 {
+			rep = 1
+		}
+		list := make([]any, 0, len(q.Rooms))
+		for _, id := range q.Rooms {
+			if id < 1 || id > 60 {
+				fail(w, http.StatusBadRequest, "неверная комната")
+				return
+			}
+			list = append(list, []any{id, rep, suction, water, 1})
+		}
+		sel, _ := json.Marshal(map[string]any{"selects": list})
+		res, err = c.send("action", map[string]any{"did": c.did, "siid": 4, "aiid": 1,
+			"in": []any{map[string]any{"piid": 1, "value": 18}, map[string]any{"piid": 10, "value": string(sel)}}})
+	} else {
+		res, err = c.send("action", map[string]any{"did": c.did, "siid": a[0], "aiid": a[1], "in": []any{}})
+	}
 	if err != nil {
 		fail(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	c.statusAt = time.Time{}
-	log.Printf("Dreame: команда %s (%s)", q.Action, clientIP(r))
+	log.Printf("Dreame: команда %s %v (%s)", q.Action, q.Rooms, clientIP(r))
 	dreameReply(w, 200, map[string]any{"ok": true, "result": res})
 }
 
