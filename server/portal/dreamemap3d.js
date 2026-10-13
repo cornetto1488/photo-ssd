@@ -1,0 +1,193 @@
+"use strict";
+// ZALET HOME — 3D-карта уборки Dreame: изометрия на canvas, стены, комнаты, маршрут, вращение мышкой/пальцем.
+
+const DM_HUES = [18, 205, 150, 285, 345, 45, 175, 235, 100, 320];
+
+class DreameMap3D {
+  constructor(canvas, opts = {}) {
+    this.cv = canvas; this.ctx = canvas.getContext("2d");
+    this.opts = Object.assign({ autoRotate: true, interactive: true, labels: true, wallH: 9 }, opts);
+    this.yaw = -0.55; this.tilt = 0.62; this.zoom = 1;
+    this.progress = 1; this.anim = 0; this.names = {};
+    this.map = null; this.running = false; this.lastTouch = 0; this.vis = true;
+    this.dragging = null;
+    if (this.opts.interactive) this._bind();
+    this._ro = new ResizeObserver(() => this.resize()); this._ro.observe(canvas);
+    this._io = new IntersectionObserver((e) => { this.vis = e[0].isIntersecting; if (this.vis) this.start(); }, { threshold: 0.05 }); this._io.observe(canvas);
+    this.resize();
+  }
+  setNames(n) { this.names = n || {}; this._dirty = true; }
+  setData(m) {
+    this.map = m;
+    const bin = atob(m.cells), n = bin.length, c = new Uint8Array(n);
+    for (let i = 0; i < n; i++) c[i] = bin.charCodeAt(i);
+    this.cells = c; this.w = m.w; this.h = m.h;
+    // стены с видимыми гранями, считаем один раз
+    const walls = [];
+    for (let y = 0; y < m.h; y++) for (let x = 0; x < m.w; x++) if (c[y * m.w + x] === 255) walls.push(x, y);
+    this.walls = walls;
+    this.totalPts = m.paths.reduce((a, p) => a + p.p.length / 2, 0);
+    this.replay();
+  }
+  replay() { this.progress = 0; this.anim = performance.now(); this._dirty = true; this.start(); }
+  resize() {
+    const r = this.cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.W = Math.max(50, r.width); this.H = Math.max(50, r.height); this.dpr = dpr;
+    this.cv.width = Math.round(this.W * dpr); this.cv.height = Math.round(this.H * dpr);
+    this._dirty = true;
+  }
+  _bind() {
+    const cv = this.cv; cv.style.touchAction = "pan-y"; cv.style.cursor = "grab";
+    cv.addEventListener("pointerdown", (e) => { this.dragging = { x: e.clientX, y: e.clientY, yaw: this.yaw, tilt: this.tilt, moved: false }; cv.setPointerCapture(e.pointerId); cv.style.cursor = "grabbing"; });
+    cv.addEventListener("pointermove", (e) => {
+      const d = this.dragging; if (!d) return;
+      const dx = e.clientX - d.x, dy = e.clientY - d.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) { d.moved = true; cv.style.touchAction = "none"; }
+      this.yaw = d.yaw + dx * 0.008; this.tilt = Math.max(0.3, Math.min(0.95, d.tilt - dy * 0.004));
+      this.lastTouch = performance.now(); this._dirty = true;
+    });
+    const up = () => { this.dragging = null; cv.style.cursor = "grab"; cv.style.touchAction = "pan-y"; };
+    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+    cv.addEventListener("wheel", (e) => { e.preventDefault(); this.zoom = Math.max(0.6, Math.min(2.2, this.zoom * (e.deltaY < 0 ? 1.1 : 0.91))); this.lastTouch = performance.now(); this._dirty = true; }, { passive: false });
+  }
+  start() {
+    if (this.running || !this.map) return;
+    this.running = true;
+    const loop = (t) => {
+      if (!this.cv.isConnected) { this.running = false; return; }
+      if (!this.vis || document.hidden) { this.running = false; return; }
+      const idle = t - this.lastTouch > 3500;
+      if (this.opts.autoRotate && idle && !this.dragging) { this.yaw += 0.0022; this._dirty = true; }
+      if (this.progress < 1) { this.progress = Math.min(1, (t - this.anim) / 5000); this._dirty = true; }
+      this._pulse = (t % 1600) / 1600;
+      if ((this._dirty || this.opts.autoRotate || this.progress < 1) && t - (this._last || 0) > 28) { this._dirty = false; this._last = t; this.draw(t); }
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  }
+  stop() { this.running = false; }
+  destroy() { this.running = false; this._ro.disconnect(); this._io.disconnect(); }
+
+  color(id, k) { // k: 0 верх, 1 плита снизу, 2 светлее
+    if (id === 99) return k === 1 ? "#26262b" : "#3b3b42";
+    const h = DM_HUES[(id - 1) % DM_HUES.length];
+    return k === 1 ? `hsl(${h},30%,20%)` : k === 2 ? `hsl(${h},40%,56%)` : `hsl(${h},36%,42%)`;
+  }
+  draw(t) {
+    const { ctx, W, H, dpr } = this; const m = this.map; if (!m) return;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+    const w = this.w, h = this.h, cells = this.cells;
+    const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) / 2;
+    const sinT = this.tilt, cosT = Math.sqrt(1 - sinT * sinT), cs = Math.cos(this.yaw), sn = Math.sin(this.yaw);
+    const wallH = this.opts.wallH;
+    // масштаб и центр — по реальным границам карты в текущем ракурсе
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+    for (const [px, py] of [[0, 0], [w, 0], [w, h], [0, h]]) {
+      const dx = px - cx, dy = py - cy, rx = dx * cs - dy * sn, ry = dx * sn + dy * cs;
+      for (const z of [-5, wallH]) { const X = rx, Y = ry * sinT - z * cosT; if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y; }
+    }
+    const s = Math.min((W * 0.92) / (x1 - x0), (H * 0.9) / (y1 - y0)) * this.zoom;
+    const OX = W / 2 - ((x0 + x1) / 2) * s, OY = H / 2 - ((y0 + y1) / 2) * s;
+    const P = (x, y, z) => { const dx = x - cx, dy = y - cy; const rx = dx * cs - dy * sn, ry = dx * sn + dy * cs; return [OX + rx * s, OY + ry * s * sinT - z * s * cosT]; };
+    const poly = (pts, fill, stroke) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 0.7; ctx.stroke(); } };
+
+    // мягкая тень под картой
+    const g = ctx.createRadialGradient(OX, OY + 8, 10, OX, OY + 8, R * s);
+    g.addColorStop(0, "rgba(0,0,0,.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // пол: сначала плита (толщина), затем верх
+    const slab = 5;
+    for (const pass of [0, 1]) {
+      const z = pass === 0 ? -slab : 0;
+      for (let y = 0; y < h; y++) {
+        let x = 0;
+        while (x < w) {
+          const c = cells[y * w + x];
+          if (c === 0 || c === 255 && pass === 1) { x++; continue; }
+          let x2 = x + 1; while (x2 < w && cells[y * w + x2] === c) x2++;
+          const id = c === 255 ? 99 : c;
+          poly([P(x, y, z), P(x2, y, z), P(x2, y + 1, z), P(x, y + 1, z)], this.color(id, pass === 0 ? 1 : 0), pass === 0 ? null : this.color(id, 0));
+          x = x2;
+        }
+      }
+    }
+    // «глянец»: лёгкая подсветка пола
+    // маршрут
+    if (m.paths.length) {
+      const total = this.totalPts, upTo = Math.floor(total * this.progress); let used = 0;
+      ctx.lineJoin = "round"; ctx.lineCap = "round";
+      for (const pass of [0, 1]) {
+        used = 0;
+        for (const p of m.paths) {
+          const n = p.p.length / 2; if (used >= upTo) break;
+          const take = Math.min(n, upTo - used); used += n;
+          ctx.beginPath();
+          for (let i = 0; i < take; i++) { const q = P(p.p[2 * i], p.p[2 * i + 1], 0.4); i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }
+          const mop = p.t === "W";
+          ctx.strokeStyle = pass === 0 ? (mop ? "rgba(95,180,255,.28)" : "rgba(255,138,76,.30)") : (mop ? "rgba(150,210,255,.95)" : "rgba(255,200,150,.95)");
+          ctx.lineWidth = pass === 0 ? Math.max(4, s * 1.6) : Math.max(1.2, s * 0.35);
+          ctx.stroke();
+        }
+      }
+    }
+    // стены: далёкие первыми
+    const WH = wallH, isW = (x, y) => x >= 0 && y >= 0 && x < w && y < h && cells[y * w + x] === 255;
+    const items = [];
+    for (let i = 0; i < this.walls.length; i += 2) { const x = this.walls[i], y = this.walls[i + 1]; const d = (x + 0.5 - cx) * sn + (y + 0.5 - cy) * cs; items.push([d, x, y]); }
+    items.sort((a, b) => a[0] - b[0]);
+    const faces = [[1, 0, 0.78], [-1, 0, 0.62], [0, 1, 0.9], [0, -1, 0.55]]; // нормаль и яркость
+    for (const [, x, y] of items) {
+      for (const [nx, ny, br] of faces) {
+        const rnY = nx * sn + ny * cs; if (rnY <= 0.0001) continue; // грань смотрит от зрителя
+        if (isW(x + nx, y + ny)) continue;
+        let a, b;
+        if (nx === 1) { a = [x + 1, y]; b = [x + 1, y + 1]; } else if (nx === -1) { a = [x, y]; b = [x, y + 1]; }
+        else if (ny === 1) { a = [x, y + 1]; b = [x + 1, y + 1]; } else { a = [x, y]; b = [x + 1, y]; }
+        const l = Math.round(70 * br + 18);
+        poly([P(a[0], a[1], 0), P(b[0], b[1], 0), P(b[0], b[1], WH), P(a[0], a[1], WH)], `rgb(${l + 22},${l + 14},${l + 6})`, `rgb(${l + 22},${l + 14},${l + 6})`);
+      }
+      poly([P(x, y, WH), P(x + 1, y, WH), P(x + 1, y + 1, WH), P(x, y + 1, WH)], "#efe7dc", "#efe7dc");
+    }
+    // зарядная станция
+    if (m.charger) {
+      const [x, y] = m.charger; const bw = 3.2;
+      poly([P(x - bw, y - bw, 0), P(x + bw, y - bw, 0), P(x + bw, y + bw, 0), P(x - bw, y + bw, 0)], "rgba(59,224,140,.35)", "rgba(59,224,140,.9)");
+      const q = P(x, y, 7); ctx.fillStyle = "#3be08c"; ctx.font = `700 ${Math.max(11, s * 3)}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("⚡", q[0], q[1]);
+    }
+    // пылесос в конце маршрута
+    const last = m.paths.length ? m.paths[m.paths.length - 1] : null;
+    let rb = m.robot;
+    if (last && last.p.length >= 2 && this.progress < 1) {
+      const total = this.totalPts, upTo = Math.max(1, Math.floor(total * this.progress)); let used = 0;
+      for (const p of m.paths) { const n = p.p.length / 2; if (used + n >= upTo) { const k = Math.max(0, upTo - used - 1); rb = [p.p[2 * k], p.p[2 * k + 1]]; break; } used += n; }
+    }
+    if (rb) {
+      const base = P(rb[0], rb[1], 0), top = P(rb[0], rb[1], 3.5), rr = Math.max(5, s * 2.6);
+      ctx.beginPath(); ctx.ellipse(base[0], base[1], rr * 1.5 * (1 + (this._pulse || 0) * 0.8), rr * 1.5 * sinT * (1 + (this._pulse || 0) * 0.8), 0, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,90,31,${0.55 * (1 - (this._pulse || 0))})`; ctx.lineWidth = 2; ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(top[0], top[1], rr, rr * sinT, 0, 0, Math.PI * 2); ctx.fillStyle = "#ff5a1f"; ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 1.4; ctx.stroke();
+    }
+    // подписи комнат
+    if (this.opts.labels) {
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      for (const r of m.rooms) {
+        const name = this.names[r.id] || `Комната ${r.id}`, q = P(r.cx, r.cy, 1.5);
+        const fs = Math.max(11, Math.min(15, s * 4.2)); ctx.font = `600 ${fs}px Inter, sans-serif`;
+        const label = `${name} · ${r.area} м²`, tw = ctx.measureText(label).width;
+        ctx.fillStyle = "rgba(8,8,10,.62)"; ctx.beginPath(); ctx.roundRect(q[0] - tw / 2 - 8, q[1] - fs * 0.85, tw + 16, fs * 1.7, fs * 0.85); ctx.fill();
+        ctx.fillStyle = "#f2f0ed"; ctx.fillText(label, q[0], q[1]);
+      }
+    }
+  }
+}
+
+// ---- загрузка карты последней уборки ----
+const dmCache = { map: null, names: null, at: 0 };
+async function dmLoad(force) {
+  if (!force && dmCache.map && Date.now() - dmCache.at < 60000) return dmCache;
+  const [map, names] = await Promise.all([api("/api/home/dreame/map?i=0"), api("/api/home/dreame/rooms").catch(() => ({}))]);
+  dmCache.map = map; dmCache.names = names || {}; dmCache.at = Date.now();
+  return dmCache;
+}

@@ -122,6 +122,14 @@
         <button class="btn" id="homeCamsEdit">⚙ Выбрать камеры</button>
       </div>
       <div class="home-cams" id="homeCams"></div>
+      <div class="section-head hidden" id="homeVacHead">
+        <div class="mono-label"><span class="acc">// ПЫЛЕСОС</span> ПОСЛЕДНЯЯ УБОРКА</div>
+        <button class="btn" data-page="vacuum">Открыть →</button>
+      </div>
+      <div class="card home-vac hidden" id="homeVac">
+        <canvas id="homeVacCanvas"></canvas>
+        <div class="home-vac-info" id="homeVacInfo"></div>
+      </div>
       <div class="section-head">
         <div class="mono-label"><span class="acc">// 02</span> ДОМ СЕЙЧАС</div>
       </div>
@@ -421,6 +429,13 @@
       <div id="drMain" class="hidden">
         <div class="card dr-hero" id="drHero"></div>
         <div class="dr-actions" id="drActions"></div>
+        <div class="card dr-map">
+          <div class="head-row"><div class="mono-label">КАРТА ПОСЛЕДНЕЙ УБОРКИ <span class="muted" id="drMapWhen"></span></div>
+            <div class="dr-map-btns"><button class="icon-btn" id="drMapReplay" title="Показать маршрут заново">↻</button></div></div>
+          <canvas id="drMapCanvas"></canvas>
+          <div class="dr-legend" id="drLegend"></div>
+          <p class="muted small">Крути карту пальцем или мышкой, колесо — масштаб. Нажми на название комнаты в списке, чтобы переименовать.</p>
+        </div>
         <div class="st-cards" id="drCards"></div>
         <div class="section-head"><div class="mono-label"><span class="acc">//</span> РАСХОДНИКИ</div></div>
         <div class="card" id="drCons"></div>
@@ -559,6 +574,7 @@
 <script src="now.js"></script>
 <script src="more.js"></script>
 <script src="stats.js"></script>
+<script src="dreamemap3d.js"></script>
 <script src="dreame.js"></script>
 </body>
 </html>

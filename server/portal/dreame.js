@@ -103,9 +103,55 @@ $("#drLogout") && ($("#drLogout").onclick = async () => {
   try { await post("/api/home/dreame/logout"); toast("Аккаунт отключён"); loadVacuum(); } catch (e) { toast(e.message, true); }
 });
 
+// ---- карта ----
+let drMapView = null, homeVacView = null;
+async function drShowMap() {
+  const cv = $("#drMapCanvas"); if (!cv) return;
+  let c; try { c = await dmLoad(); } catch (e) { $("#drLegend").innerHTML = '<span class="muted small">' + drEsc(e.message) + "</span>"; return; }
+  if (!drMapView || drMapView.cv !== cv) drMapView = new DreameMap3D(cv, { autoRotate: true });
+  drMapView.setNames(c.names); drMapView.setData(c.map);
+  $("#drMapWhen").textContent = c.map.t ? "· " + new Date(c.map.t * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
+  drLegend(c);
+}
+function drLegend(c) {
+  $("#drLegend").innerHTML = c.map.rooms.slice().sort((a, b) => a.id - b.id).map((r) => {
+    const col = "hsl(" + DM_HUES[(r.id - 1) % DM_HUES.length] + ",36%,46%)";
+    return '<button class="dr-room" data-room="' + r.id + '"><i style="background:' + col + '"></i><b>' + drEsc(c.names[r.id] || "Комната " + r.id) + "</b><span>" + r.area + " м²</span></button>";
+  }).join("");
+  $$("[data-room]", $("#drLegend")).forEach((b) => b.onclick = async () => {
+    const id = b.dataset.room, cur = c.names[id] || "";
+    const v = prompt("Название комнаты " + id, cur); if (v === null) return;
+    c.names[id] = v.trim().slice(0, 30);
+    try { await post("/api/home/dreame/rooms", c.names); } catch (e) { toast(e.message, true); }
+    if (drMapView) drMapView.setNames(c.names); if (homeVacView) homeVacView.setNames(c.names); drLegend(c);
+  });
+}
+$("#drMapReplay") && ($("#drMapReplay").onclick = () => drMapView && drMapView.replay());
+
+// ---- карточка на главной ----
+async function homeVacStart() {
+  const card = $("#homeVac"), head = $("#homeVacHead"); if (!card) return;
+  let c, st;
+  try { c = await dmLoad(); } catch (e) { card.classList.add("hidden"); head.classList.add("hidden"); return; }
+  try { const j = await api("/api/home/dreame"); st = j.status; } catch (e) {}
+  card.classList.remove("hidden"); head.classList.remove("hidden");
+  const cv = $("#homeVacCanvas");
+  if (!homeVacView || homeVacView.cv !== cv) homeVacView = new DreameMap3D(cv, { autoRotate: true, interactive: true, labels: false });
+  homeVacView.setNames(c.names); homeVacView.setData(c.map);
+  const t = c.map.t ? new Date(c.map.t * 1000) : null;
+  const when = t ? t.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + ", " + t.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "";
+  $("#homeVacInfo").innerHTML =
+    '<div class="mono-label">' + drEsc(when) + "</div>" +
+    '<div class="home-vac-stats"><div><b>' + (c.map.area || 0) + "</b><span>м² убрано</span></div><div><b>" + drHM(c.map.min) + "</b><span>в работе</span></div><div><b>" + c.map.rooms.length + "</b><span>комнат</span></div></div>" +
+    (st ? '<div class="home-vac-state"><span class="dr-pill ' + (st.state === 4 ? "bad" : DR_CLEANING.has(st.state) ? "live" : "idle") + '">' + drEsc(st.stateText) + "</span>" + drBattery(st.battery, st.charging === 1) + "</div>" : "") +
+    '<button class="btn" id="homeVacReplay">↻ Маршрут заново</button>';
+  $("#homeVacReplay").onclick = () => homeVacView.replay();
+}
+
 const _goVac = go;
 go = function (p) {
   _goVac(p);
   clearInterval(drm.timer);
-  if (p === "vacuum") { loadVacuum(); drm.timer = setInterval(loadVacuum, 15000); }
+  if (p === "vacuum") { loadVacuum(); drShowMap(); drm.timer = setInterval(loadVacuum, 15000); }
+  if (p === "home") homeVacStart();
 };
