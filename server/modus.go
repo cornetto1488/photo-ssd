@@ -51,7 +51,7 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Читаем на каждый запрос: можно обновить сессию без пересборки (после рестарта сервиса).
-	sessionID := strings.TrimSpace(os.Getenv("MODUS_SESSION_ID"))
+	sessionID := modusSessionID()
 	if sessionID == "" {
 		modusError(w, http.StatusServiceUnavailable, "На сервере не настроена переменная MODUS_SESSION_ID")
 		return
@@ -178,7 +178,7 @@ func modusRefresh(ctx context.Context, camera int) {
 	if len(st.Consumers) > 0 {
 		return
 	}
-	sessionID := strings.TrimSpace(os.Getenv("MODUS_SESSION_ID"))
+	sessionID := modusSessionID()
 	if sessionID == "" {
 		return
 	}

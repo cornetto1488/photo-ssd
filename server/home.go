@@ -1160,6 +1160,9 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/files/upload": p.s.handleFileUpload,
 		"/api/cameras/archive-url": homeCameraArchive, // архив камер Modus (modus.go)
 		"/api/cameras/play/":       homeCameraPlay,    // видео через go2rtc (modus.go)
+		"/api/cameras/scan":         homeCameraScan,
+		"/api/cameras/config":       homeCameraConfig,
+		"/api/cameras/session":      homeCameraSession,
 	}
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))
