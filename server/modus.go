@@ -20,7 +20,9 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -72,54 +74,12 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, _ := json.Marshal(map[string]any{
-		"start_ms": p.StartMs,
-		"end_ms":   p.EndMs,
-		"item_key": fmt.Sprintf(modusItemKeyFmt, p.Camera),
-	})
-
-	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, modusAPIURL, bytes.NewReader(body))
-	if err != nil {
-		modusError(w, http.StatusInternalServerError, "Не удалось собрать запрос к Modus API")
+	raw, status, msg := modusFetch(r.Context(), sessionID, p)
+	if msg != "" {
+		modusError(w, status, msg)
 		return
 	}
-	req.Header.Set("X-AppVersion", "3.1.3 (2)")
-	req.Header.Set("X-Api-Version", "2")
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "ZALET-HOME-Modus-Archive/1.0")
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
-
-	resp, err := modusClient.Do(req)
-	if err != nil {
-		var ne interface{ Timeout() bool }
-		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
-			modusError(w, http.StatusGatewayTimeout, "Modus API не ответил вовремя")
-			return
-		}
-		log.Printf("modus: request error: %v", err)
-		modusError(w, http.StatusBadGateway, "Не удалось связаться с Modus API")
-		return
-	}
-	defer resp.Body.Close()
-
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	if err != nil {
-		modusError(w, http.StatusBadGateway, "Не удалось прочитать ответ Modus API")
-		return
-	}
-
-	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-		modusError(w, http.StatusBadGateway, "Сессия Modus истекла или не имеет доступа")
-		return
-	}
-	if resp.StatusCode >= 400 {
-		// Заголовки/куки и креды в браузер не отдаём.
-		modusError(w, http.StatusBadGateway, fmt.Sprintf("Modus API вернул HTTP %d", resp.StatusCode))
-		return
-	}
+	modusRemember(p)
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -137,6 +97,94 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 		text = text[:12000]
 	}
 	json.NewEncoder(w).Encode(map[string]string{"raw": text})
+}
+
+// modusFetch просит у Modus ссылку на архив. При ошибке возвращает текст для браузера и HTTP-статус.
+func modusFetch(parent context.Context, sessionID string, p modusArchiveRequest) (raw []byte, status int, msg string) {
+	body, _ := json.Marshal(map[string]any{
+		"start_ms": p.StartMs,
+		"end_ms":   p.EndMs,
+		"item_key": fmt.Sprintf(modusItemKeyFmt, p.Camera),
+	})
+	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, modusAPIURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, http.StatusInternalServerError, "Не удалось собрать запрос к Modus API"
+	}
+	req.Header.Set("X-AppVersion", "3.1.3 (2)")
+	req.Header.Set("X-Api-Version", "2")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", "ZALET-HOME-Modus-Archive/1.0")
+	req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+
+	resp, err := modusClient.Do(req)
+	if err != nil {
+		var ne interface{ Timeout() bool }
+		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &ne) && ne.Timeout()) {
+			return nil, http.StatusGatewayTimeout, "Modus API не ответил вовремя"
+		}
+		log.Printf("modus: request error: %v", err)
+		return nil, http.StatusBadGateway, "Не удалось связаться с Modus API"
+	}
+	defer resp.Body.Close()
+	raw, err = io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil {
+		return nil, http.StatusBadGateway, "Не удалось прочитать ответ Modus API"
+	}
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return nil, http.StatusBadGateway, "Сессия Modus истекла или не имеет доступа"
+	}
+	if resp.StatusCode >= 400 {
+		// Заголовки/куки и креды в браузер не отдаём.
+		return nil, http.StatusBadGateway, fmt.Sprintf("Modus API вернул HTTP %d", resp.StatusCode)
+	}
+	return raw, 0, ""
+}
+
+// Ссылка Modus одноразовая, а <video> часто делает 2 запроса (проверка + основной) или переподключается.
+// Поэтому помним последний период камеры и берём свежую ссылку, когда у потока нет зрителей.
+var (
+	modusMu   sync.Mutex
+	modusLast = map[int]modusArchiveRequest{}
+)
+
+func modusRemember(p modusArchiveRequest) {
+	modusMu.Lock()
+	modusLast[p.Camera] = p
+	modusMu.Unlock()
+}
+
+// modusRefresh обновляет источник потока camN, если на нём никто не смотрит.
+func modusRefresh(ctx context.Context, camera int) {
+	modusMu.Lock()
+	defer modusMu.Unlock()
+	p, ok := modusLast[camera]
+	if !ok {
+		return
+	}
+	var st struct {
+		Consumers []any `json:"consumers"`
+	}
+	c, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if req, err := http.NewRequestWithContext(c, http.MethodGet, fmt.Sprintf("http://%s/api/streams?src=cam%d", go2rtcAddr, camera), nil); err == nil {
+		if resp, err := http.DefaultClient.Do(req); err == nil {
+			json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&st)
+			resp.Body.Close()
+		}
+	}
+	if len(st.Consumers) > 0 {
+		return
+	}
+	sessionID := strings.TrimSpace(os.Getenv("MODUS_SESSION_ID"))
+	if sessionID == "" {
+		return
+	}
+	if raw, _, msg := modusFetch(ctx, sessionID, p); msg == "" {
+		modusAttachStream(raw, camera)
+	}
 }
 
 const go2rtcAddr = "127.0.0.1:1984"
@@ -195,9 +243,13 @@ func homeCameraPlay(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if s := r.URL.Query().Get("src"); s != "" && !strings.HasPrefix(s, "cam") {
+	src := r.URL.Query().Get("src")
+	if src != "" && !strings.HasPrefix(src, "cam") {
 		http.NotFound(w, r)
 		return
+	}
+	if n, err := strconv.Atoi(strings.TrimPrefix(src, "cam")); err == nil && (rest == "/api/stream.mp4" || rest == "/api/stream.m3u8") {
+		modusRefresh(r.Context(), n)
 	}
 	r2 := r.Clone(r.Context())
 	r2.URL.Path = rest
