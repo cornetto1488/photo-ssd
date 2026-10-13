@@ -79,3 +79,7 @@
 .home-cams.editing .home-cam-pick { display: block; }
 .home-cams.editing .home-cam { border-style: dashed; border-color: var(--acc); cursor: default; }
 @media (max-width: 760px) { .home-cams { grid-template-columns: 1fr; } }
+
+/* подписи на плитках главной скрыты в простое — не закрывают картинку */
+.home-cam-bar { opacity: 0; transition: opacity .2s var(--e); pointer-events: none; }
+.home-cam:hover .home-cam-bar, .home-cams.editing .home-cam-bar { opacity: 1; }
