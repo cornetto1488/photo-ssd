@@ -108,24 +108,50 @@ let drMapView = null, homeVacView = null;
 async function drShowMap() {
   const cv = $("#drMapCanvas"); if (!cv) return;
   let c; try { c = await dmLoad(); } catch (e) { $("#drLegend").innerHTML = '<span class="muted small">' + drEsc(e.message) + "</span>"; return; }
-  if (!drMapView || drMapView.cv !== cv) drMapView = new DreameMap3D(cv, { autoRotate: true });
+  if (!drMapView || drMapView.cv !== cv) { drMapView = new DreameMap3D(cv, { autoRotate: true, selectable: true }); drMapView.onSelect = drPickUpdate; }
   drMapView.setNames(c.names); drMapView.setData(c.map);
   $("#drMapWhen").textContent = c.map.t ? "· " + new Date(c.map.t * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "";
   drLegend(c);
 }
 function drLegend(c) {
+  const sel = drMapView ? drMapView.selected : new Set();
   $("#drLegend").innerHTML = c.map.rooms.slice().sort((a, b) => a.id - b.id).map((r) => {
     const col = "hsl(" + DM_HUES[(r.id - 1) % DM_HUES.length] + ",36%,46%)";
-    return '<button class="dr-room" data-room="' + r.id + '"><i style="background:' + col + '"></i><b>' + drEsc(c.names[r.id] || "Комната " + r.id) + "</b><span>" + r.area + " м²</span></button>";
+    return '<span class="dr-room' + (sel.has(r.id) ? " on" : "") + '" data-room="' + r.id + '"><i style="background:' + col + '"></i><b>' + drEsc(c.names[r.id] || "Комната " + r.id) + "</b><span>" + r.area + ' м²</span><button class="dr-ren" data-ren="' + r.id + '" title="Переименовать">✎</button></span>';
   }).join("");
-  $$("[data-room]", $("#drLegend")).forEach((b) => b.onclick = async () => {
-    const id = b.dataset.room, cur = c.names[id] || "";
+  $$("[data-room]", $("#drLegend")).forEach((b) => b.onclick = (e) => {
+    if (e.target.closest("[data-ren]")) return;
+    drMapView && drMapView.toggle(Number(b.dataset.room));
+  });
+  $$("[data-ren]", $("#drLegend")).forEach((b) => b.onclick = async (e) => {
+    e.stopPropagation();
+    const id = b.dataset.ren, cur = c.names[id] || "";
     const v = prompt("Название комнаты " + id, cur); if (v === null) return;
     c.names[id] = v.trim().slice(0, 30);
-    try { await post("/api/home/dreame/rooms", c.names); } catch (e) { toast(e.message, true); }
-    if (drMapView) drMapView.setNames(c.names); if (homeVacView) homeVacView.setNames(c.names); drLegend(c);
+    try { await post("/api/home/dreame/rooms", c.names); } catch (er) { toast(er.message, true); }
+    if (drMapView) drMapView.setNames(c.names); if (homeVacView) homeVacView.setNames(c.names); drLegend(c); drPickUpdate(drMapView ? [...drMapView.selected] : []);
   });
 }
+function drPickUpdate(ids) {
+  const bar = $("#drPick"); if (!bar) return;
+  if (dmCache.map) drLegend(dmCache);
+  if (!ids.length) { bar.classList.add("hidden"); return; }
+  const rooms = dmCache.map.rooms.filter((r) => ids.includes(r.id));
+  const area = rooms.reduce((a, r) => a + r.area, 0);
+  $("#drPickText").innerHTML = "<b>Выбрано: " + drEsc(rooms.map((r) => dmCache.names[r.id] || "Комната " + r.id).join(", ")) + "</b><span class=\"muted\"> · " + area.toFixed(1) + " м²</span>";
+  bar.classList.remove("hidden");
+}
+$("#drPickClear") && ($("#drPickClear").onclick = () => drMapView && drMapView.clearSelection());
+$("#drPickGo") && ($("#drPickGo").onclick = async () => {
+  if (!drMapView || !drMapView.selected.size) return;
+  const ids = [...drMapView.selected].sort((a, b) => a - b);
+  const names = ids.map((id) => dmCache.names[id] || "Комната " + id).join(", ");
+  if (!(await askConfirm({ icon: "🧹", title: "Убрать выбранное?", text: names + ". Пылесос уберёт только эти комнаты.", yes: "Убрать" }))) return;
+  const b = $("#drPickGo"); b.disabled = true; b.textContent = "Отправляю…";
+  try { await post("/api/home/dreame/cmd", { action: "rooms", rooms: ids }); toast("Поехал убирать: " + names); drMapView.clearSelection(); setTimeout(loadVacuumFresh, 3000); }
+  catch (e) { toast(e.message, true); }
+  finally { b.disabled = false; b.textContent = "▶ Убрать выбранное"; }
+});
 $("#drMapReplay") && ($("#drMapReplay").onclick = () => drMapView && drMapView.replay());
 
 // ---- карта дома на главной ----

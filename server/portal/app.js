@@ -173,13 +173,20 @@ function go(p) {
   if (p !== "home") homeCamsStop();
   ({ home: () => { loadStatus(); homeCamsStart(); }, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, cameras: loadCameras, router: () => { loadStatus(); loadClients(); loadAccess(); }, logs: loadLogs, vault: loadVault, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
 }
+const NAV_ICONS = {"home":"<path d=\"M3 11.5 12 4l9 7.5M5.5 9.6V20h13V9.6M10 20v-5.5h4V20\"/>","devices":"<path d=\"M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z\"/>","vacuum":"<circle cx=\"12\" cy=\"12\" r=\"9\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/><path d=\"M12 3v3\"/>","cameras":"<path d=\"M3 7h13v10H3zM16 10.5l5-3v9l-5-3\"/>","photos":"<rect x=\"3\" y=\"4\" width=\"18\" height=\"16\" rx=\"2.5\"/><circle cx=\"9\" cy=\"10\" r=\"2\"/><path d=\"m21 16-5-5-8 8\"/>","stats":"<path d=\"M4 20V11M10 20V4M16 20v-6M22 20H2\"/>","logs":"<path d=\"M4 6h16M4 12h16M4 18h10\"/>","pc":"<rect x=\"3\" y=\"4\" width=\"18\" height=\"12\" rx=\"2\"/><path d=\"M8 20h8M12 16v4\"/>","router":"<rect x=\"3\" y=\"14\" width=\"18\" height=\"6\" rx=\"2\"/><path d=\"M7 17h.01M11 17h.01M8.5 10.5a5 5 0 0 1 7 0M6 7.5a8.5 8.5 0 0 1 12 0\"/>","vault":"<circle cx=\"8\" cy=\"15\" r=\"4\"/><path d=\"m11 12 9-9M16 7l3 3\"/>","services":"<rect x=\"3\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"3\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.5\"/><rect x=\"14\" y=\"14\" width=\"7\" height=\"7\" rx=\"1.5\"/>","more":"<circle cx=\"5\" cy=\"12\" r=\"1.2\"/><circle cx=\"12\" cy=\"12\" r=\"1.2\"/><circle cx=\"19\" cy=\"12\" r=\"1.2\"/>"};
+const NAV_GROUPS = [["ДОМ",[["home","Дом"],["devices","Устройства"],["vacuum","Пылесос"],["cameras","Камеры"]]],["ДАННЫЕ",[["photos","Фото"],["stats","Статистика"],["logs","Журналы"]]],["СИСТЕМА",[["pc","ПК"],["router","Роутер"],["vault","Пароли"],["services","Сервисы"]]]];
 function openMore() {
-  const items = [["vacuum", "Пылесос"], ["stats", "Статистика"], ["pc", "Компьютер"], ["logs", "Журналы"], ["services", "Сервисы"]];
-  const pick = items.map(([k, v]) => `<button class="btn" data-go="${k}">${v}</button>`).join("");
-  const t = $("#toast"); t.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${pick}</div>`; t.classList.remove("bad"); t.classList.add("show");
-  t.style.pointerEvents = "auto";
-  $$("[data-go]", t).forEach((b) => b.onclick = () => { t.classList.remove("show"); t.style.pointerEvents = "none"; go(b.dataset.go); });
-  clearTimeout(timers.toast); timers.toast = setTimeout(() => { t.classList.remove("show"); t.style.pointerEvents = "none"; }, 5000);
+  const old = $("#moreSheet"); if (old) old.remove();
+  const inTab = new Set(["home", "devices", "cameras", "photos"]);
+  const groups = NAV_GROUPS.map(([g, items]) => [g, items.filter(([k]) => !inTab.has(k))]).filter(([, items]) => items.length);
+  const el = document.createElement("div"); el.className = "sheet"; el.id = "moreSheet";
+  el.innerHTML = '<div class="sheet-card"><div class="sheet-grip"></div>' + groups.map(([g, items]) =>
+    '<div class="mono-label sheet-group">' + g + '</div><div class="sheet-grid">' + items.map(([k, t]) =>
+      '<button data-go="' + k + '"><svg viewBox="0 0 24 24" class="ni">' + NAV_ICONS[k] + "</svg><span>" + t + "</span></button>").join("") + "</div>").join("") + "</div>";
+  document.body.appendChild(el);
+  const close = () => { el.classList.add("closing"); setTimeout(() => el.remove(), 180); };
+  el.onclick = (e) => { if (e.target === el) close(); };
+  $$("[data-go]", el).forEach((b) => b.onclick = () => { close(); go(b.dataset.go); });
 }
 $$("[data-page]").forEach((a) => a.onclick = () => go(a.dataset.page));
 
@@ -407,6 +414,38 @@ let lbIndex = -1, lbList = null; // lbList — свой список (в это�
 const lbItems = () => lbList || gal.items;
 function lbOpen(i) { lbIndex = i; $("#lightbox").classList.remove("hidden"); document.body.style.overflow = "hidden"; lbShow(0); }
 function lbClose() { $("#lightbox").classList.add("hidden"); document.body.style.overflow = ""; $("#lbMedia").innerHTML = ""; lbIndex = -1; lbList = null; }
+let heicLib = null;
+function loadHeicLib() {
+  if (!heicLib) heicLib = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/libheif-js@1.17.1/libheif-wasm/libheif-bundle.js";
+    s.onload = async () => { try { let l = window.libheif(); if (l && l.then) l = await l; res(l); } catch (e) { rej(e); } };
+    s.onerror = () => { heicLib = null; rej(new Error("декодер HEIC не загрузился")); };
+    document.head.appendChild(s);
+  });
+  return heicLib;
+}
+async function lbDecodeHeic(it, url) {
+  const media = $("#lbMedia"); if (!media) return;
+  const stale = () => lbItems()[lbIndex] !== it;
+  const note = document.createElement("div"); note.className = "lb-note"; note.textContent = "Открываю оригинал HEIC…"; media.appendChild(note);
+  try {
+    const [lib, buf] = await Promise.all([loadHeicLib(), fetch(url).then((r) => r.arrayBuffer())]);
+    const img = new lib.HeifDecoder().decode(new Uint8Array(buf))[0];
+    const w = img.get_width(), h = img.get_height();
+    const cv = document.createElement("canvas"); cv.width = w; cv.height = h; const ctx = cv.getContext("2d");
+    const id = ctx.createImageData(w, h);
+    await new Promise((res, rej) => img.display(id, (d) => d ? res(d) : rej(new Error("не удалось раскрыть"))));
+    ctx.putImageData(id, 0, 0);
+    // уменьшаем до экранного размера: быстрее и легче
+    const k = Math.min(1, 2600 / Math.max(w, h)), c2 = document.createElement("canvas"); c2.width = Math.round(w * k); c2.height = Math.round(h * k);
+    c2.getContext("2d").drawImage(cv, 0, 0, c2.width, c2.height);
+    const blob = await new Promise((r) => c2.toBlob(r, "image/jpeg", 0.9));
+    if (stale()) return;
+    const el = media.querySelector("img"); if (el) el.src = URL.createObjectURL(blob);
+    note.remove();
+  } catch (e) { if (!stale()) { note.textContent = "Оригинал HEIC не открылся — показано превью. Скачай файл кнопкой ⤓."; setTimeout(() => note.remove(), 6000); } }
+}
 function lbShow(dir) {
   const it = lbItems()[lbIndex]; if (!it) return;
   const media = $("#lbMedia");
@@ -418,7 +457,10 @@ function lbShow(dir) {
     } else {
       // сначала превью, потом оригинал (HEIC браузеры кроме Safari не показывают — тогда остаётся превью)
       media.innerHTML = `<img src="${thumb}" alt="">`;
-      const full = new Image(); full.onload = () => { const im = media.querySelector("img"); if (im && lbIndex === lbItems().indexOf(it)) im.src = url; }; full.src = url;
+      const full = new Image(); full.onload = () => { const im = media.querySelector("img"); if (im && lbIndex === lbItems().indexOf(it)) im.src = url; };
+      // HEIC Chrome/Edge не открывают: превью от iPhone — квадратная обрезка, поэтому раскрываем оригинал декодером прямо в браузере
+      full.onerror = () => { if (/\.(heic|heif)$/i.test(it.path)) lbDecodeHeic(it, url); };
+      full.src = url;
     }
     $("#lbDate").textContent = new Date((it.date || it.time) * 1000).toLocaleString("ru-RU", { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" });
     $("#lbMeta").textContent = `${it.path.split("/").pop()} · ${fmtBytes(it.size)}${it.album ? " · " + it.album : ""}`;
@@ -1097,3 +1139,11 @@ document.addEventListener("DOMContentLoaded", async () => {
     else showLock();
   } catch (e) { showLock(); }
 });
+
+// ---- боковая панель: закрепление ----
+(() => {
+  const apply = (on) => { document.body.classList.toggle("side-pinned", on); const b = $("#sideToggle"); if (b) { b.textContent = on ? "⇤" : "⇥"; b.title = on ? "Свернуть меню" : "Закрепить меню"; } };
+  let on = false; try { on = localStorage.getItem("zh-side") === "1"; } catch (e) {}
+  apply(on);
+  const b = $("#sideToggle"); if (b) b.onclick = () => { on = !on; apply(on); try { localStorage.setItem("zh-side", on ? "1" : "0"); } catch (e) {} };
+})();

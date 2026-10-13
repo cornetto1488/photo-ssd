@@ -201,3 +201,76 @@
 .ht-ev { font-size: 15px; font-weight: 700; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .ht-sub { font-size: 12px; color: var(--muted); }
 .ht .btn { align-self: flex-start; margin-top: 6px; }
+
+.dr-room.on { border-color: var(--acc); background: rgba(255,90,31,.14); }
+.dr-ren { border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 0 0 0 2px; font-size: 13px; }
+.dr-ren:hover { color: var(--acc-2); }
+.dr-pick { position: sticky; bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; padding: 12px 14px; border-radius: 16px; border: 1px solid var(--acc); background: rgba(18,18,22,.92); backdrop-filter: blur(10px); box-shadow: 0 10px 36px rgba(0,0,0,.5); }
+.dr-pick-btns { display: flex; gap: 8px; }
+
+/* ===== навигация: боковая панель (десктоп) и лист «Ещё» (телефон) ===== */
+.ni { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.nav-group { display: none; }
+.side-toggle { display: none; }
+@media (min-width: 861px) {
+  #app { padding-left: 76px; transition: padding-left .22s var(--e); }
+  body.side-pinned #app { padding-left: 236px; }
+  .top { position: fixed; left: 0; top: 0; bottom: 0; width: 76px; flex-direction: column; align-items: stretch; gap: 8px; padding: 16px 12px 14px; border-right: 1px solid var(--line); border-bottom: 0;
+    background: rgba(10,10,13,.94); z-index: 40; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; transition: width .22s var(--e), box-shadow .22s var(--e); }
+  .top::-webkit-scrollbar { display: none; }
+  .top:hover, body.side-pinned .top { width: 236px; }
+  body:not(.side-pinned) .top:hover { box-shadow: 28px 0 90px rgba(0,0,0,.6); }
+  .top .brand { padding: 2px 3px 12px; gap: 14px; min-height: 48px; }
+  .top .wordmark { opacity: 0; white-space: nowrap; transition: opacity .15s; }
+  .top:hover .wordmark, body.side-pinned .wordmark { opacity: 1; }
+  #nav { flex-direction: column; margin: 0; gap: 2px; flex: 1; }
+  .nav-group { display: block; height: 1px; margin: 12px 12px 10px; background: var(--line); font-family: var(--mono); font-size: 0; letter-spacing: .16em; color: var(--dim); white-space: nowrap; overflow: hidden; transition: all .15s; }
+  .top:hover .nav-group, body.side-pinned .nav-group { height: 14px; margin: 14px 12px 4px; background: none; font-size: 10px; }
+  #nav a { display: flex; align-items: center; gap: 14px; height: 44px; padding: 0 12px; border-radius: 14px; font-family: var(--sans); font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; white-space: nowrap; }
+  #nav a span { opacity: 0; transition: opacity .15s; }
+  .top:hover #nav a span, body.side-pinned #nav a span { opacity: 1; }
+  #nav a.active { background: linear-gradient(135deg, var(--acc-2), var(--acc)); color: var(--bg); box-shadow: 0 6px 22px rgba(255,90,31,.32); font-weight: 600; }
+  .top-right { flex-direction: column; align-items: stretch; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .top-right .pill { text-align: center; padding: 7px 0; font-size: 11px; }
+  .top-right .icon-btn { width: 100%; height: 38px; border-radius: 12px; }
+  .top:hover .top-right, body.side-pinned .top-right { flex-direction: row; flex-wrap: wrap; }
+  .top:hover .top-right .pill, body.side-pinned .top-right .pill { flex: 1 0 100%; }
+  .top:hover .top-right .icon-btn, body.side-pinned .top-right .icon-btn { flex: 1; width: auto; }
+  .side-toggle { display: inline-block; }
+  main { padding-top: 28px; }
+  .groups { top: 20px; }
+}
+@media (max-width: 860px) {
+  .bottom-nav a svg { width: 24px; height: 24px; }
+  .bottom-nav a { gap: 3px; font-size: 10px; letter-spacing: 0; font-family: var(--sans); font-weight: 500; }
+}
+.sheet { position: fixed; inset: 0; z-index: 70; background: rgba(0,0,0,.55); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); display: flex; align-items: flex-end; animation: fade .2s var(--e); }
+.sheet.closing { opacity: 0; transition: opacity .18s; }
+.sheet-card { width: 100%; max-height: 82vh; overflow: auto; background: var(--panel); border: 1px solid var(--line-2); border-bottom: 0; border-radius: 28px 28px 0 0; padding: 12px 16px calc(28px + env(safe-area-inset-bottom)); animation: sheetUp .3s var(--e); }
+@keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet-grip { width: 44px; height: 4px; border-radius: 2px; background: var(--line-2); margin: 0 auto 16px; }
+.sheet-group { margin: 14px 4px 10px; }
+.sheet-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.sheet-grid button { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 6px 14px; border-radius: 20px; border: 1px solid var(--line); background: var(--bg-2); color: var(--ink); font-size: 13px; font-weight: 500; cursor: pointer; }
+.sheet-grid button:active { transform: scale(.97); border-color: var(--acc); }
+.sheet-grid .ni { width: 28px; height: 28px; stroke: var(--acc-2); }
+
+.lb-note { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 3; padding: 8px 16px; border-radius: 999px; background: rgba(18,18,22,.9); border: 1px solid var(--line-2); font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+/* уплотнение боковой панели для невысоких окон */
+@media (min-width: 861px) {
+  #nav a { height: 38px; border-radius: 12px; }
+  .top .brand { min-height: 40px; padding-bottom: 8px; }
+  .nav-group { margin: 9px 12px 7px; }
+  .top:hover .nav-group, body.side-pinned .nav-group { height: 12px; margin: 10px 12px 2px; }
+  .top-right { gap: 6px; padding-top: 8px; }
+  .top-right .icon-btn { height: 34px; }
+  body:not(.side-pinned) .top:not(:hover) #pinBtn, body:not(.side-pinned) .top:not(:hover) #sideToggle { display: none; }
+  .top:hover .top-right .pill, body.side-pinned .top-right .pill { flex: 1 1 auto; align-self: center; }
+  .top:hover .top-right .icon-btn, body.side-pinned .top-right .icon-btn { flex: 0 0 34px; width: 34px; }
+  .top:hover .top-right, body.side-pinned .top-right { flex-wrap: nowrap; align-items: center; }
+}
+
+/* просмотр фото: портретные снимки целиком, без «приближения» */
+.lb-media { grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.lb-media img, .lb-media video { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; }

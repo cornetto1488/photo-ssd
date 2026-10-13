@@ -10,7 +10,7 @@ class DreameMap3D {
     this.yaw = -0.55; this.tilt = 0.62; this.zoom = 1;
     this.progress = 1; this.anim = 0; this.names = {};
     this.map = null; this.running = false; this.lastTouch = 0; this.vis = true;
-    this.dragging = null;
+    this.dragging = null; this.selected = new Set(); this.onSelect = null;
     if (this.opts.interactive) this._bind();
     this._ro = new ResizeObserver(() => this.resize()); this._ro.observe(canvas);
     this._io = new IntersectionObserver((e) => { this.vis = e[0].isIntersecting; if (this.vis) this.start(); }, { threshold: 0.05 }); this._io.observe(canvas);
@@ -47,9 +47,35 @@ class DreameMap3D {
       this.lastTouch = performance.now(); this._dirty = true;
     });
     const up = () => { this.dragging = null; cv.style.cursor = "grab"; cv.style.touchAction = "pan-y"; };
-    cv.addEventListener("pointerup", up); cv.addEventListener("pointercancel", up);
+    cv.addEventListener("pointerup", (e) => { const d = this.dragging; up(); if (d && !d.moved && this.opts.selectable) this._pick(e); });
+    cv.addEventListener("pointercancel", up);
     cv.addEventListener("wheel", (e) => { e.preventDefault(); this.zoom = Math.max(0.6, Math.min(2.2, this.zoom * (e.deltaY < 0 ? 1.1 : 0.91))); this.lastTouch = performance.now(); this._dirty = true; }, { passive: false });
   }
+  // тап по комнате: обратная проекция точки экрана на пол
+  _pick(e) {
+    const P = this._proj; if (!P || !this.cells) return;
+    const r = this.cv.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+    const rx = (sx - P.OX) / P.s, ry = (sy - P.OY) / (P.s * P.sinT);
+    const dx = rx * P.cs + ry * P.sn, dy = -rx * P.sn + ry * P.cs;
+    const x = Math.floor(dx + P.cx), y = Math.floor(dy + P.cy);
+    if (x < 0 || y < 0 || x >= this.w || y >= this.h) return;
+    let id = this.cells[y * this.w + x];
+    if (id === 255 || id === 0 || id === 99) { // стена/край: ищем ближайшую комнату рядом
+      id = 0;
+      for (let rad = 1; rad <= 3 && !id; rad++) for (let oy = -rad; oy <= rad && !id; oy++) for (let ox = -rad; ox <= rad; ox++) {
+        const xx = x + ox, yy = y + oy; if (xx < 0 || yy < 0 || xx >= this.w || yy >= this.h) continue;
+        const v = this.cells[yy * this.w + xx]; if (v > 0 && v < 99) { id = v; break; }
+      }
+    }
+    if (!id || id >= 99) return;
+    this.toggle(id);
+  }
+  toggle(id) {
+    if (this.selected.has(id)) this.selected.delete(id); else this.selected.add(id);
+    this._dirty = true; this.lastTouch = performance.now();
+    if (this.onSelect) this.onSelect([...this.selected].sort((a, b) => a - b));
+  }
+  clearSelection() { this.selected.clear(); this._dirty = true; if (this.onSelect) this.onSelect([]); }
   start() {
     if (this.running || !this.map) return;
     this.running = true;
@@ -57,7 +83,7 @@ class DreameMap3D {
       if (!this.cv.isConnected) { this.running = false; return; }
       if (!this.vis || document.hidden) { this.running = false; return; }
       const idle = t - this.lastTouch > 3500;
-      if (this.opts.autoRotate && idle && !this.dragging) { this.yaw += 0.0022; this._dirty = true; }
+      if (this.opts.autoRotate && idle && !this.dragging && !this.selected.size) { this.yaw += 0.0022; this._dirty = true; }
       if (this.progress < 1) { this.progress = Math.min(1, (t - this.anim) / 5000); this._dirty = true; }
       this._pulse = (t % 1600) / 1600;
       if ((this._dirty || this.opts.autoRotate || this.progress < 1) && t - (this._last || 0) > 28) { this._dirty = false; this._last = t; this.draw(t); }
@@ -71,7 +97,7 @@ class DreameMap3D {
   color(id, k) { // k: 0 верх, 1 плита снизу, 2 светлее
     if (id === 99) return k === 1 ? "#26262b" : "#3b3b42";
     const h = DM_HUES[(id - 1) % DM_HUES.length];
-    return k === 1 ? `hsl(${h},30%,20%)` : k === 2 ? `hsl(${h},40%,56%)` : `hsl(${h},36%,42%)`;
+    return k === 1 ? `hsl(${h},30%,20%)` : k === 2 ? `hsl(${h},62%,60%)` : k === 3 ? `hsl(${h},18%,28%)` : `hsl(${h},36%,42%)`;
   }
   draw(t) {
     const { ctx, W, H, dpr } = this; const m = this.map; if (!m) return;
@@ -88,6 +114,8 @@ class DreameMap3D {
     }
     const s = Math.min((W * 0.92) / (x1 - x0), (H * 0.9) / (y1 - y0)) * this.zoom;
     const OX = W / 2 - ((x0 + x1) / 2) * s, OY = H / 2 - ((y0 + y1) / 2) * s;
+    this._proj = { OX, OY, s, sinT, cs, sn, cx, cy };
+    const hasSel = this.selected.size > 0;
     const P = (x, y, z) => { const dx = x - cx, dy = y - cy; const rx = dx * cs - dy * sn, ry = dx * sn + dy * cs; return [OX + rx * s, OY + ry * s * sinT - z * s * cosT]; };
     const poly = (pts, fill, stroke) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 0.7; ctx.stroke(); } };
 
@@ -107,7 +135,8 @@ class DreameMap3D {
           if (c === 0 || c === 255 && pass === 1) { x++; continue; }
           let x2 = x + 1; while (x2 < w && cells[y * w + x2] === c) x2++;
           const id = c === 255 ? 99 : c;
-          poly([P(x, y, z), P(x2, y, z), P(x2, y + 1, z), P(x, y + 1, z)], this.color(id, pass === 0 ? 1 : 0), pass === 0 ? null : this.color(id, 0));
+          const sel = this.selected.has(id), kk = sel ? 2 : hasSel && id !== 99 ? 3 : 0;
+          poly([P(x, y, z), P(x2, y, z), P(x2, y + 1, z), P(x, y + 1, z)], this.color(id, pass === 0 ? 1 : kk), pass === 0 ? null : (sel ? "#ffb27a" : this.color(id, kk)));
           x = x2;
         }
       }
@@ -176,7 +205,8 @@ class DreameMap3D {
         const name = this.names[r.id] || `Комната ${r.id}`, q = P(r.cx, r.cy, 1.5);
         const fs = Math.max(11, Math.min(15, s * 4.2)); ctx.font = `600 ${fs}px Inter, sans-serif`;
         const label = `${name} · ${r.area} м²`, tw = ctx.measureText(label).width;
-        ctx.fillStyle = "rgba(8,8,10,.62)"; ctx.beginPath(); ctx.roundRect(q[0] - tw / 2 - 8, q[1] - fs * 0.85, tw + 16, fs * 1.7, fs * 0.85); ctx.fill();
+        const isSel = this.selected.has(r.id);
+        ctx.fillStyle = isSel ? "rgba(255,90,31,.92)" : "rgba(8,8,10,.62)"; ctx.beginPath(); ctx.roundRect(q[0] - tw / 2 - 8, q[1] - fs * 0.85, tw + 16, fs * 1.7, fs * 0.85); ctx.fill();
         ctx.fillStyle = "#f2f0ed"; ctx.fillText(label, q[0], q[1]);
       }
     }

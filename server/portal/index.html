@@ -56,22 +56,26 @@
       <div class="wordmark"><span class="za">ZA</span>LET<span class="home">HOME</span></div>
     </div>
     <nav id="nav">
-      <a data-page="home" class="active">Дом</a>
-      <a data-page="devices">Устройства</a>
-      <a data-page="pc">ПК</a>
-      <a data-page="photos">Фото</a>
-      <a data-page="cameras">Камеры</a>
-      <a data-page="vacuum">Пылесос</a>
-      <a data-page="stats">Статистика</a>
-      <a data-page="logs">Журналы</a>
-      <a data-page="vault">Пароли</a>
-      <a data-page="router">Роутер</a>
-      <a data-page="services">Сервисы</a>
+      <div class="nav-group">ДОМ</div>
+      <a data-page="home" class="active" title="Дом"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 9.6V20h13V9.6M10 20v-5.5h4V20"/></svg><span>Дом</span></a>
+      <a data-page="devices" title="Устройства"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg><span>Устройства</span></a>
+      <a data-page="vacuum" title="Пылесос"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/><path d="M12 3v3"/></svg><span>Пылесос</span></a>
+      <a data-page="cameras" title="Камеры"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M3 7h13v10H3zM16 10.5l5-3v9l-5-3"/></svg><span>Камеры</span></a>
+      <div class="nav-group">ДАННЫЕ</div>
+      <a data-page="photos" title="Фото"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg><span>Фото</span></a>
+      <a data-page="stats" title="Статистика"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/></svg><span>Статистика</span></a>
+      <a data-page="logs" title="Журналы"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Журналы</span></a>
+      <div class="nav-group">СИСТЕМА</div>
+      <a data-page="pc" title="ПК"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg><span>ПК</span></a>
+      <a data-page="router" title="Роутер"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 17h.01M11 17h.01M8.5 10.5a5 5 0 0 1 7 0M6 7.5a8.5 8.5 0 0 1 12 0"/></svg><span>Роутер</span></a>
+      <a data-page="vault" title="Пароли"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m11 12 9-9M16 7l3 3"/></svg><span>Пароли</span></a>
+      <a data-page="services" title="Сервисы"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Сервисы</span></a>
     </nav>
     <div class="top-right">
       <span class="pill" id="clock">--:--</span>
       <button class="icon-btn" id="pinBtn" title="Сменить PIN">⚿</button>
       <button class="icon-btn" id="logoutBtn" title="Выйти">⎋</button>
+      <button class="icon-btn side-toggle" id="sideToggle" title="Закрепить меню">⇥</button>
     </div>
   </header>
 
@@ -433,7 +437,11 @@
             <div class="dr-map-btns"><button class="icon-btn" id="drMapReplay" title="Показать маршрут заново">↻</button></div></div>
           <canvas id="drMapCanvas"></canvas>
           <div class="dr-legend" id="drLegend"></div>
-          <p class="muted small">Крути карту пальцем или мышкой, колесо — масштаб. Нажми на название комнаты в списке, чтобы переименовать.</p>
+          <div class="dr-pick hidden" id="drPick">
+            <div class="dr-pick-text" id="drPickText"></div>
+            <div class="dr-pick-btns"><button class="btn" id="drPickClear">Сбросить</button><button class="btn btn-acc" id="drPickGo">▶ Убрать выбранное</button></div>
+          </div>
+          <p class="muted small">Крути карту пальцем или мышкой, колесо — масштаб. Коснись комнаты на карте или в списке — она выделится, и её можно убрать отдельно. ✎ у комнаты — переименовать.</p>
         </div>
         <div class="st-cards" id="drCards"></div>
         <div class="section-head"><div class="mono-label"><span class="acc">//</span> РАСХОДНИКИ</div></div>
@@ -504,12 +512,11 @@
   </footer>
 
   <nav class="bottom-nav" id="bottomNav">
-    <a data-page="home" class="active"><i>⌂</i>Дом</a>
-    <a data-page="devices"><i>◐</i>Устройства</a>
-    <a data-page="router"><i>⌁</i>Роутер</a>
-    <a data-page="photos"><i>▣</i>Фото</a>
-    <a data-page="vault"><i>⚿</i>Пароли</a>
-    <a data-page="more"><i>⋯</i>Ещё</a>
+    <a data-page="home" class="active"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 9.6V20h13V9.6M10 20v-5.5h4V20"/></svg>Дом</a>
+    <a data-page="devices"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.6.6 1 1.4 1 2.5h6c0-1.1.4-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>Свет</a>
+    <a data-page="cameras"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><path d="M3 7h13v10H3zM16 10.5l5-3v9l-5-3"/></svg>Камеры</a>
+    <a data-page="photos"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg>Фото</a>
+    <a data-page="more"><svg viewBox="0 0 24 24" class="ni" aria-hidden="true"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>Ещё</a>
   </nav>
 </div>
 
