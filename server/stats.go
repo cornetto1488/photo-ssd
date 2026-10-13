@@ -513,7 +513,7 @@ func (p *homePortal) handleStatsNet(w http.ResponseWriter, r *http.Request) {
 		Down   int64   `json:"down"`
 		Series []int64 `json:"series"` // по корзинам wan[].t, в тех же границах
 	}
-	var cl []cliOut
+	cl := []cliOut{}
 	for ip, t := range totals {
 		cl = append(cl, cliOut{IP: ip, Name: names[ip], Up: t[0], Down: t[1]})
 	}

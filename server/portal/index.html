@@ -61,6 +61,7 @@
       <a data-page="pc">ПК</a>
       <a data-page="photos">Фото</a>
       <a data-page="cameras">Камеры</a>
+      <a data-page="stats">Статистика</a>
       <a data-page="logs">Журналы</a>
       <a data-page="vault">Пароли</a>
       <a data-page="router">Роутер</a>
@@ -323,7 +324,8 @@
 
       <div class="card cam-player hidden" id="cameraPlayer">
         <div class="head-row cam-player-head">
-          <div><div class="cam-badge" id="cameraPlayerMode">АРХИВ</div><h3 id="cameraPlayerTitle">Камера</h3></div>
+          <div><div class="cam-badge" id="cameraPlayerMode">АРХИВ</div><h3 id="cameraPlayerTitle">Камера</h3>
+            <div class="cam-speed hidden" id="camSpeed"><span class="muted small">Скорость</span><button class="cam-chip on" data-sp="1">×1</button><button class="cam-chip" data-sp="2">×2</button><button class="cam-chip" data-sp="4">×4</button><button class="cam-chip" data-sp="8">×8</button><button class="cam-chip" data-sp="16">×16</button></div></div>
           <div class="cam-player-btns">
             <button class="icon-btn" id="camPrev" title="Предыдущая камера">◀</button>
             <button class="icon-btn" id="camNext" title="Следующая камера">▶</button>
@@ -343,6 +345,11 @@
           <button class="cam-chip" data-preset="today">Сегодня</button>
           <button class="cam-chip" data-preset="yesterday">Вчера</button>
         </div>
+        <div class="cam-timeline">
+          <div class="cam-tl-head"><input class="field" id="camDay" type="date"><div class="cam-tl-time" id="camSliderLbl">00:00</div><div class="cam-tl-win" id="camWin"><button class="cam-chip" data-w="5">5 мин</button><button class="cam-chip on" data-w="15">15 мин</button><button class="cam-chip" data-w="60">1 час</button><button class="cam-chip" data-w="180">3 часа</button></div><button class="btn btn-acc" id="camWatch">▶ Смотреть</button></div>
+          <input type="range" id="camSlider" class="cam-slider" min="0" max="1439" step="1" value="0">
+          <div class="cam-tl-ticks"><span>00</span><span>04</span><span>08</span><span>12</span><span>16</span><span>20</span><span>24</span></div>
+        </div>
         <div class="cam-period">
           <label>Начало<input class="field" id="camStart" type="datetime-local"></label>
           <label>Конец<input class="field" id="camEnd" type="datetime-local"></label>
@@ -351,6 +358,42 @@
       <div class="modus-notice" id="camsNotice" role="status"></div>
       <div class="cam-grid" id="cameraGrid"></div>
 
+    </section>
+
+    <!-- СТАТИСТИКА -->
+    <section class="page" id="page-stats">
+      <div class="page-head">
+        <div>
+          <div class="mono-label"><span class="acc">// 07</span> ДОМ В ЦИФРАХ</div>
+          <h2 class="display">СТАТИСТИКА</h2>
+        </div>
+      </div>
+      <div class="seg tabs" id="statsTabs">
+        <button class="active" data-st="lights">Свет</button>
+        <button data-st="net">Сеть</button>
+      </div>
+
+      <div id="stLights">
+        <div class="st-bar"><div class="seg" id="stLightDays"><button data-d="7" class="active">7 дней</button><button data-d="14">14</button><button data-d="30">30</button></div></div>
+        <div class="st-cards" id="stLightCards"></div>
+        <div class="card st-card"><div class="mono-label">ПО ДНЯМ · ЧАСОВ СВЕТА</div><div id="stLightDaysChart"></div></div>
+        <div class="card st-card"><div class="mono-label">В КАКОЕ ВРЕМЯ СУТОК ГОРИТ</div><div id="stLightHours"></div></div>
+        <div class="section-head"><div class="mono-label"><span class="acc">//</span> ПО УСТРОЙСТВАМ</div></div>
+        <div class="st-list" id="stLightList"></div>
+      </div>
+
+      <div id="stNet" class="hidden">
+        <div class="st-bar">
+          <div class="seg" id="stNetHours"><button data-h="24" class="active">24 часа</button><button data-h="168">7 дней</button><button data-h="720">30 дней</button></div>
+          <button class="btn btn-acc" id="stSpeedNow">⚡ Замерить скорость</button>
+        </div>
+        <div class="st-cards" id="stNetCards"></div>
+        <div class="card st-card"><div class="mono-label">СКОРОСТЬ ИНТЕРНЕТА · МБИТ/С</div><div id="stSpeedChart"></div></div>
+        <div class="card st-card"><div class="mono-label">ТРАФИК ИНТЕРНЕТА · <span class="st-down">↓ загрузка</span> <span class="st-up">↑ отдача</span></div><div id="stWanChart"></div></div>
+        <div class="section-head"><div class="mono-label"><span class="acc">//</span> ТРАФИК ПО УСТРОЙСТВАМ</div></div>
+        <div class="st-list" id="stClients"></div>
+        <p class="muted small">Трафик по устройствам считается по соединениям роутера с интернетом (обмен внутри дома не учитывается). История копится с момента включения статистики.</p>
+      </div>
     </section>
 
     <!-- ЖУРНАЛЫ -->
@@ -388,6 +431,11 @@
           <div class="mono-label"><span class="acc">// 09</span> ВСЁ В ОДНОМ МЕСТЕ</div>
           <h2 class="display">СЕРВИСЫ</h2>
         </div>
+      </div>
+      <div class="card st-card" id="installCard">
+        <div class="mono-label">📲 УСТАНОВКА НА ТЕЛЕФОН</div>
+        <p class="muted small" style="margin:10px 0 6px"><b>iPhone (Safari):</b> «Поделиться» → «На экран Домой». <b>Android (Chrome):</b> меню ⋮ → «Установить приложение» / «Добавить на главный экран». Откроется на весь экран, как обычное приложение, с иконкой ZALET HOME.</p>
+        <p class="muted small" style="margin:0">Системные пуш-уведомления браузеры разрешают только по HTTPS, а панель работает по http внутри дома, поэтому уведомления приходят в Telegram (Журналы → настройки событий).</p>
       </div>
       <div class="launch big" id="launchAll"></div>
       <div class="section-head">
@@ -475,5 +523,6 @@
 <script src="access.js"></script>
 <script src="now.js"></script>
 <script src="more.js"></script>
+<script src="stats.js"></script>
 </body>
 </html>

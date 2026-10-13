@@ -174,7 +174,7 @@ function go(p) {
   ({ home: () => { loadStatus(); homeCamsStart(); }, devices: () => loadDevices(), pc: loadStatus, photos: loadPhotos, cameras: loadCameras, router: () => { loadStatus(); loadClients(); loadAccess(); }, logs: loadLogs, vault: loadVault, services: () => { loadStatus(); loadServiceInfo(); } })[p]?.();
 }
 function openMore() {
-  const items = [["pc", "Компьютер"], ["logs", "Журналы"], ["services", "Сервисы"]];
+  const items = [["stats", "Статистика"], ["pc", "Компьютер"], ["logs", "Журналы"], ["services", "Сервисы"]];
   const pick = items.map(([k, v]) => `<button class="btn" data-go="${k}">${v}</button>`).join("");
   const t = $("#toast"); t.innerHTML = `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">${pick}</div>`; t.classList.remove("bad"); t.classList.add("show");
   t.style.pointerEvents = "auto";
@@ -726,7 +726,7 @@ function camPreset(kind) {
   else if (kind === "3h") setCameraPeriod(e - 3 * 3600e3, e);
   else if (kind === "today") setCameraPeriod(midnight, e);
   else if (kind === "yesterday") setCameraPeriod(midnight - DAY, midnight);
-  $$(".cam-chip").forEach((c) => c.classList.toggle("on", c.dataset.preset === kind));
+  $$(".cam-chips .cam-chip").forEach((c) => c.classList.toggle("on", c.dataset.preset === kind));
 }
 const camName = (c) => (c.name && c.name.trim()) || `Камера ${c.n}`;
 
@@ -870,6 +870,7 @@ async function loadCameras() {
   const grid = $("#cameraGrid");
   if (grid && !grid.dataset.once) { grid.dataset.once = "1"; }
   if (!$("#camStart")?.value || !$("#camEnd")?.value) camPreset("1h");
+  tlInit();
   renderCameraGrid();
   // автопоиск: первый заход или раз в сутки подтягиваем новые каналы
   if (!cams.list.length || Date.now() - cams.scannedAt > DAY) camsScan(false);
@@ -894,11 +895,12 @@ async function openCamera(camera, mode, button) {
   camsNotice(`Подключаю камеру ${camera}…`);
   const player = $("#cameraPlayer"), body = $("#cameraPlayerBody");
   try {
-    const data = await post("/api/cameras/archive-url", mode === "live" ? { camera, live: true } : { camera, start_ms: startMs, end_ms: endMs });
+    const data = await post("/api/cameras/archive-url", mode === "live" ? { camera, live: true } : { camera, start_ms: startMs, end_ms: endMs, speed: cams.speed > 1 ? cams.speed : 0 });
     cams.current = camera; cams.mode = mode;
     const c = cams.list.find((x) => x.n === camera);
     $("#cameraPlayerTitle").textContent = c ? camName(c) : `Камера ${camera}`;
     $("#cameraPlayerMode").textContent = mode === "live" ? "● LIVE" : "АРХИВ";
+    $("#camSpeed")?.classList.toggle("hidden", mode === "live");
     $("#cameraPlayerMode").className = "cam-badge " + (mode === "live" ? "live" : "");
     body.replaceChildren();
     player.classList.remove("hidden");
@@ -918,7 +920,7 @@ async function openCamera(camera, mode, button) {
       const fmt = (ms) => ms ? new Date(ms).toLocaleString("ru-RU") : "—";
       $("#cameraPlayerHint").textContent = mode === "live"
         ? "Прямой эфир с камеры. Для просмотра записи выбери период и нажми «Архив»."
-        : `Период: ${fmt(startMs)} — ${fmt(endMs)}. Архив камеры: ${fmt(d.earliest_available_ms)} — ${fmt(d.latest_available_ms)}.`;
+        : `Период: ${fmt(startMs)} — ${fmt(endMs)}${cams.speed > 1 ? ` · ускорение ×${cams.speed} (таймлапс)` : ""}. Архив камеры: ${fmt(d.earliest_available_ms)} — ${fmt(d.latest_available_ms)}.`;
       camsNotice("");
       renderCameraGrid();
       player.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -953,9 +955,9 @@ $("#camsSessionBtn") && ($("#camsSessionBtn").onclick = () => camsSessionToggle(
 $("#camsSessionSave") && ($("#camsSessionSave").onclick = camsSessionSave);
 $("#camsSessionInput") && $("#camsSessionInput").addEventListener("keydown", (e) => { if (e.key === "Enter") camsSessionSave(); });
 $("#camLiveAll") && ($("#camLiveAll").onclick = () => { const v = cams.list.find((c) => !c.hidden); if (v) openCamera(v.n, "live"); });
-$$(".cam-chip").forEach((c) => c.onclick = () => camPreset(c.dataset.preset));
-$("#camStart") && $("#camStart").addEventListener("input", () => $$(".cam-chip").forEach((c) => c.classList.remove("on")));
-$("#camEnd") && $("#camEnd").addEventListener("input", () => $$(".cam-chip").forEach((c) => c.classList.remove("on")));
+$$(".cam-chips .cam-chip").forEach((c) => c.onclick = () => camPreset(c.dataset.preset));
+$("#camStart") && $("#camStart").addEventListener("input", () => $$(".cam-chips .cam-chip").forEach((c) => c.classList.remove("on")));
+$("#camEnd") && $("#camEnd").addEventListener("input", () => $$(".cam-chips .cam-chip").forEach((c) => c.classList.remove("on")));
 $("#camPrev") && ($("#camPrev").onclick = () => camStep(-1));
 $("#camNext") && ($("#camNext").onclick = () => camStep(1));
 $("#camReload") && ($("#camReload").onclick = () => cams.current != null && openCamera(cams.current, cams.mode));
@@ -963,6 +965,50 @@ $("#cameraPlayerClose") && ($("#cameraPlayerClose").onclick = () => {
   $("#cameraPlayerBody").replaceChildren(); $("#cameraPlayer").classList.add("hidden"); cams.current = null; renderCameraGrid();
 });
 
+
+// ---- таймлайн по суткам и скорость архива ----
+cams.speed = 1; cams.win = 15;
+const tlPad = (n) => String(n).padStart(2, "0");
+const tlDayStr = (d) => `${d.getFullYear()}-${tlPad(d.getMonth() + 1)}-${tlPad(d.getDate())}`;
+const tlLabel = (m) => `${tlPad(Math.floor(m / 60))}:${tlPad(m % 60)}`;
+let tlTimer = null;
+function tlSyncFromInputs() {
+  const v = $("#camStart")?.value; if (!v || !$("#camDay")) return;
+  const d = new Date(v);
+  $("#camDay").value = tlDayStr(d);
+  const m = d.getHours() * 60 + d.getMinutes();
+  $("#camSlider").value = String(m); $("#camSliderLbl").textContent = tlLabel(m);
+  const e = $("#camEnd")?.value ? new Date($("#camEnd").value) : null;
+  if (e) { const w = Math.round((e - d) / 60000); $$("#camWin [data-w]").forEach((b) => b.classList.toggle("on", Number(b.dataset.w) === w)); }
+}
+function tlApply(reopen) {
+  const day = $("#camDay").value || tlDayStr(new Date());
+  const m = Number($("#camSlider").value);
+  $("#camSliderLbl").textContent = tlLabel(m);
+  const start = new Date(`${day}T00:00`).getTime() + m * 60000;
+  const end = Math.min(start + cams.win * 60000, Date.now());
+  if (end <= start) { toast("Это время ещё не наступило", true); return; }
+  setCameraPeriod(start, end);
+  $$(".cam-chips .cam-chip").forEach((c) => c.classList.remove("on"));
+  if (reopen && cams.current != null && cams.mode === "archive") { clearTimeout(tlTimer); tlTimer = setTimeout(() => openCamera(cams.current, "archive"), 250); }
+}
+function tlInit() {
+  if (!$("#camDay")) return;
+  const today = new Date(), oldest = new Date(Date.now() - 14 * DAY);
+  $("#camDay").max = tlDayStr(today); $("#camDay").min = tlDayStr(oldest);
+  tlSyncFromInputs();
+}
+$("#camSlider") && ($("#camSlider").oninput = () => { $("#camSliderLbl").textContent = tlLabel(Number($("#camSlider").value)); });
+$("#camSlider") && ($("#camSlider").onchange = () => tlApply(true));
+$("#camDay") && ($("#camDay").onchange = () => tlApply(true));
+$$("#camWin [data-w]").forEach((b) => b.onclick = () => { cams.win = Number(b.dataset.w); $$("#camWin [data-w]").forEach((x) => x.classList.toggle("on", x === b)); tlApply(true); });
+$("#camWatch") && ($("#camWatch").onclick = () => { const v = cams.current ?? cams.list.find((c) => !c.hidden)?.n; if (v != null) openCamera(v, "archive"); });
+$$("#camSpeed [data-sp]").forEach((b) => b.onclick = () => {
+  cams.speed = Number(b.dataset.sp);
+  $$("#camSpeed [data-sp]").forEach((x) => x.classList.toggle("on", x === b));
+  if (cams.current != null && cams.mode === "archive") openCamera(cams.current, "archive");
+});
+$$(".cam-chips .cam-chip").forEach((c) => c.addEventListener("click", () => setTimeout(tlSyncFromInputs, 0)));
 
 // ---------- камеры на главной (3 слота, камеры выбираются тут же) ----------
 // Safari/iPhone играют HLS, остальные — fMP4 (в Chrome «нативный» HLS есть, но он капризнее).
@@ -1036,7 +1082,7 @@ function start() {
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
-  go(["home", "devices", "pc", "photos", "cameras", "network", "router", "logs", "vault", "access", "services"].includes(p) ? p : "home");
+  go(["home", "devices", "pc", "photos", "cameras", "network", "router", "logs", "vault", "access", "services", "stats"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
   timers.devs = setInterval(() => { if (page === "devices") loadDevices(); }, 15000);
   timers.logs = setInterval(() => { if (page === "logs" && $("#logLive").checked) loadLogs(); }, 4000);
