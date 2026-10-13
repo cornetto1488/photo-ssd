@@ -34,7 +34,9 @@ enum LiveActivityManager {
               ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         let state = ZaletActivityAttributes.ContentState(done: done, total: total, speed: 0, current: "",
                                                          uploaded: 0, finished: false, bytes: 0)
-        if let current = Activity<ZaletActivityAttributes>.activities.first {
+        let all = Activity<ZaletActivityAttributes>.activities
+        for extra in all.dropFirst() { Task { await extra.end(nil, dismissalPolicy: .immediate) } }
+        if let current = all.first {
             Task { await current.update(ActivityContent(state: state, staleDate: nil)) }
             return
         }
@@ -43,12 +45,20 @@ enum LiveActivityManager {
         #endif
     }
 
+    private static var lastUpdate = Date.distantPast
+
     static func update(done: Int, total: Int, speed: Double, current: String, uploaded: Int) {
         #if canImport(ActivityKit)
         guard #available(iOS 16.2, *) else { return }
+        // не дёргаем экран блокировки и «островок» чаще раза в 15 секунд
+        guard Date().timeIntervalSince(lastUpdate) > 15 else { return }
+        lastUpdate = Date()
         let state = ZaletActivityAttributes.ContentState(done: done, total: total, speed: speed, current: current,
                                                          uploaded: uploaded, finished: false, bytes: 0)
-        for a in Activity<ZaletActivityAttributes>.activities {
+        let all = Activity<ZaletActivityAttributes>.activities
+        // если вдруг накопилось несколько карточек — оставляем одну
+        for extra in all.dropFirst() { Task { await extra.end(nil, dismissalPolicy: .immediate) } }
+        if let a = all.first {
             Task { await a.update(ActivityContent(state: state, staleDate: Date(timeIntervalSinceNow: 120))) }
         }
         #endif
@@ -62,7 +72,7 @@ enum LiveActivityManager {
         for a in Activity<ZaletActivityAttributes>.activities {
             Task {
                 await a.end(ActivityContent(state: state, staleDate: nil),
-                            dismissalPolicy: .after(Date(timeIntervalSinceNow: 15 * 60)))
+                            dismissalPolicy: .after(Date(timeIntervalSinceNow: 60)))
             }
         }
         #endif

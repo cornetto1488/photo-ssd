@@ -108,8 +108,26 @@
         </div>
       </div>
 
+      <div class="alerts" id="alerts"></div>
       <div class="section-head">
-        <div class="mono-label"><span class="acc">// 02</span> РОДНОЙ ОМСК</div>
+        <div class="mono-label"><span class="acc">// 02</span> ДОМ СЕЙЧАС</div>
+      </div>
+      <div class="now-grid">
+        <div class="card now-vpn" id="vpnCard"><div class="mono-label">VPN</div><div class="spinner"></div></div>
+        <div class="card now-net" id="netCard">
+          <div class="head-row"><div class="mono-label"><span class="live-dot"></span> ИНТЕРНЕТ СЕЙЧАС</div><button class="btn btn-sm" id="speedBtn">⚡ Замерить скорость</button></div>
+          <div class="net-rates"><div><span class="mono-label">↓ ЗАГРУЗКА</span><b id="rateRx">—</b></div><div><span class="mono-label">↑ ОТДАЧА</span><b id="rateTx">—</b></div><div id="speedRes" class="speed-res"></div></div>
+          <canvas id="trafficCanvas"></canvas>
+        </div>
+        <div class="card now-notes" id="notesCard">
+          <div class="head-row"><div class="seg" id="notesTabs"><button data-l="notes" class="active">Заметки</button><button data-l="shop">Покупки</button></div><button class="btn btn-sm" id="notesClear" title="Убрать отмеченные">✓ Очистить</button></div>
+          <form id="noteForm" class="note-form"><input class="field" id="noteText" placeholder="Добавить…" maxlength="500" autocomplete="off"><button class="btn btn-acc btn-sm">＋</button></form>
+          <div class="notes" id="notesList"></div>
+        </div>
+      </div>
+
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// 03</span> РОДНОЙ ОМСК</div>
       </div>
       <div class="cozy-strip" id="cozyStrip"></div>
 
@@ -118,7 +136,7 @@
       <div class="grid tiles" id="tiles"></div>
 
       <div class="section-head">
-        <div class="mono-label"><span class="acc">// 03</span> МОИ ПРОЕКТЫ</div>
+        <div class="mono-label"><span class="acc">// 04</span> МОИ ПРОЕКТЫ</div>
       </div>
       <div class="projects" id="projects">
         <a class="proj proj-cv" href="https://apodmarchuk.ru" target="_blank" rel="noopener">
@@ -139,7 +157,7 @@
       </div>
 
       <div class="section-head">
-        <div class="mono-label"><span class="acc">// 04</span> БЫСТРЫЙ ДОСТУП</div>
+        <div class="mono-label"><span class="acc">// 05</span> БЫСТРЫЙ ДОСТУП</div>
         <a class="btn btn-sm" data-page="services">Все сервисы →</a>
       </div>
       <div class="launch" id="launch"></div>
@@ -289,7 +307,7 @@
   </main>
 
   <footer class="foot">
-    <span>ZALET HOME · v3.4</span>
+    <span>ZALET HOME · v3.5</span>
     <span class="foot-warm">дома тепло ♥</span>
   </footer>
 
@@ -359,5 +377,6 @@
 <script src="cozy.js"></script>
 <script src="vault.js"></script>
 <script src="access.js"></script>
+<script src="now.js"></script>
 </body>
 </html>

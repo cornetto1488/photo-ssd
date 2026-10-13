@@ -155,6 +155,8 @@ final class AppSettings: ObservableObject {
     @Published var morningHour: Int { didSet { d.set(morningHour, forKey: "morningHour") } }
     @Published var haptics: Bool { didSet { d.set(haptics, forKey: "haptics") } }
     @Published var liveActivity: Bool { didSet { d.set(liveActivity, forKey: "liveActivity") } }
+    /// Системная плашка iOS 26 «продолжить в фоне» — вторая карточка на экране блокировки, по умолчанию выключена.
+    @Published var systemContinue: Bool { didSet { d.set(systemContinue, forKey: "systemContinue") } }
 
     @Published var onboarded: Bool { didSet { d.set(onboarded, forKey: "onboarded") } }
 
@@ -210,6 +212,7 @@ final class AppSettings: ObservableObject {
         morningHour = d.object(forKey: "morningHour") as? Int ?? 8
         haptics = b("haptics", true)
         liveActivity = b("liveActivity", true)
+        systemContinue = b("systemContinue", false)
 
         onboarded = b("onboarded", false)
 

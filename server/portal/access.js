@@ -44,6 +44,7 @@ function renderRouterCard() {
       <button class="btn" data-ra="wifi">⟳ Перезапустить Wi-Fi</button>
       <button class="btn btn-danger" data-ra="reboot">⏻ Перезагрузить роутер</button>
       <button class="btn" data-ra="luci">⌁ Открыть LuCI</button>
+      <button class="btn" data-backup>⤓ Резервная копия настроек</button>
     </div>`;
   $$("[data-ra]").forEach((b) => b.onclick = async () => {
     const a = b.dataset.ra;

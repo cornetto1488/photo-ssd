@@ -36,7 +36,11 @@ struct PhotoSSDApp: App {
     @StateObject private var store = SyncStore.shared
     @StateObject private var log = LogStore.shared
 
-    init() { applyGlobalAppearance() }
+    init() {
+        applyGlobalAppearance()
+        // просим iOS заново проиндексировать команды для «Команд» и Siri
+        ZaletShortcuts.updateAppShortcutParameters()
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -49,6 +53,16 @@ struct PhotoSSDApp: App {
             .environmentObject(log)
             .preferredColorScheme(.dark)
             .tint(Theme.acc)
+            // zalet://sync — для «Команд» через действие «Открыть URL» (работает при любой подписи ipa)
+            .onOpenURL { url in
+                guard url.scheme == "zalet" else { return }
+                if url.host == "sync" || url.host == nil {
+                    Task {
+                        await engine.refreshServer()
+                        engine.start(reason: "ссылка zalet://sync")
+                    }
+                }
+            }
         }
         .onChange(of: phase) { p in
             switch p {

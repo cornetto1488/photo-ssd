@@ -208,7 +208,7 @@ function tick() {
 // ---------- статус дома ----------
 async function loadStatus() {
   try { status = await api("/api/home/status"); } catch (e) { $("#heroSub").textContent = e.message; return; }
-  renderTiles(); renderPC(); renderServices(); renderMarquee(); renderHouse(); renderLaunch();
+  renderTiles(); renderPC(); renderServices(); renderMarquee(); renderHouse(); renderLaunch(); try { renderAlerts(); } catch (e) {}
 }
 function tile({ label, num, val, sub, ok, bar, accent }) {
   return `<div class="tile ${accent ? "accent" : ""}">
@@ -268,13 +268,16 @@ function devCard(d) {
   if (d.kind === "light") {
     on = !!val(d, "switch_led");
     const bv2 = val(d, "bright_value_v2"), bv1 = val(d, "bright_value");
-    const pct = bv2 !== undefined ? Math.round((bv2 - 10) / 990 * 100) : bv1 !== undefined ? Math.round((bv1 - 10) / 245 * 100) : 50;
+    const pct = d.bright >= 0 && d.bright !== undefined ? d.bright : bv2 !== undefined ? Math.round((bv2 - 10) / 990 * 100) : bv1 !== undefined ? Math.round((bv1 - 10) / 990 * 100) : 50;
     const tv2 = val(d, "temp_value_v2"), tv1 = val(d, "temp_value");
-    const tp = tv2 !== undefined ? Math.round(tv2 / 10) : tv1 !== undefined ? Math.round(tv1 / 2.55) : 50;
-    controls = `<div class="range-row"><span>ЯРКОСТЬ</span><input type="range" min="1" max="100" value="${Math.max(1, pct)}" data-bright="${d.id}"></div>
+    const tp = d.temp >= 0 && d.temp !== undefined ? d.temp : tv2 !== undefined ? Math.round(tv2 / 10) : tv1 !== undefined ? Math.round(tv1 / 10) : 50;
+    controls = (d.power === "off" ? `<div class="power-note">⚡ Нет питания — «${esc(d.powerSwitch)}» выключен. Включу его вместе с лампой.</div>` : "") +
+      `<div class="range-row"><span>ЯРКОСТЬ</span><input type="range" min="1" max="100" value="${Math.max(1, pct)}" data-bright="${d.id}"></div>
       <div class="range-row"><span>ТОН</span><input type="range" class="range-temp" min="0" max="100" value="${tp}" data-temp="${d.id}"></div>`;
   } else if (d.kind === "switch" || d.kind === "plug") {
     on = !!val(d, "switch_1");
+    const cd = Number(val(d, "countdown_1") || 0);
+    controls = `<div class="sw-row"><button class="btn btn-sm" data-timer="${d.id}">⏲ ${cd > 0 && on ? "через " + Math.ceil(cd / 60) + " мин" : "Таймер"}</button>${devices.some((x) => x.kind === "light" && x.room === d.room && d.room) ? `<span class="mono-label">питает лампы комнаты</span>` : ""}</div>`;
   } else if (d.kind === "pc") {
     on = status ? status.pc.online : !!val(d, "switch_1");
   }
@@ -289,7 +292,7 @@ function devCard(d) {
       ${d.icon ? `<img src="${esc(d.icon)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : `<img alt="">`}
       <div style="min-width:0">
         <div class="name">${esc(d.name)}</div>
-        <div class="meta"><span class="dot ${d.online ? "ok" : "bad"}" style="width:6px;height:6px"></span> ${d.online ? "в сети" : "не в сети"} · ${kindName}</div>
+        <div class="meta"><span class="dot ${d.online ? "ok" : "bad"}" style="width:6px;height:6px"></span> ${d.online ? (d.local ? "по сети дома" : "в сети") : "не в сети"} · ${kindName}${d.guess ? ` <span class="guess" title="Лампы Bluetooth Beacon не сообщают состояние. Показываю последнюю команду с учётом выключателя на стене.">≈</span>` : ""}</div>
       </div>
       ${canToggle ? `<label class="switch"><input type="checkbox" ${on ? "checked" : ""} data-toggle="${d.id}" ${d.online ? "" : "disabled"}><i></i></label>` : ""}
     </div>
@@ -320,6 +323,11 @@ document.addEventListener("change", async (e) => {
     const d = devices.find((x) => x.id === t.dataset.toggle); if (!d) return;
     const on = t.checked; t.closest(".dev").classList.toggle("on", on);
     const code = d.kind === "light" ? "switch_led" : "switch_1";
+    // лампа без питания: сначала включаем выключатель комнаты
+    if (d.kind === "light" && on && d.power === "off") {
+      const sw = devices.find((x) => x.kind === "switch" && x.room === d.room);
+      if (sw) { await sendCmd(sw.id, [{ code: "switch_1", value: true }]); setLocal(sw.id, "switch_1", true); d.power = "on"; await new Promise((r) => setTimeout(r, 2500)); }
+    }
     await sendCmd(d.id, [{ code, value: on }], `${d.name}: ${on ? "включено" : "выключено"}`);
     renderDevices();
   }
@@ -770,7 +778,7 @@ function start() {
   if (started) return; started = true;
   tick(); renderSky(); timers.clock = setInterval(() => { tick(); renderSky(); }, 10000);
   setTimeout(() => $("#boot").classList.add("done"), 700);
-  loadDevices(); loadServiceInfo(); loadClientsQuiet(); checkSites(); netViz.start(); cozyStart();
+  loadDevices(); loadServiceInfo(); loadClientsQuiet(); checkSites(); netViz.start(); cozyStart(); nowStart();
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
@@ -782,10 +790,11 @@ function start() {
   if (!status) loadStatus();
 }
 
-(async () => {
+// запуск — когда загружены все модули (cozy, vault, access, now)
+document.addEventListener("DOMContentLoaded", async () => {
   try {
     const info = await api("/api/home/pin-info");
     if (info.authed) { $("#app").classList.remove("hidden"); start(); }
     else showLock();
   } catch (e) { showLock(); }
-})();
+});

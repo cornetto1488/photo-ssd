@@ -508,6 +508,9 @@ struct NightSettings: View {
             Section {
                 Toggle("Тактильный отклик", isOn: $settings.haptics).row()
                 Toggle("Live Activity на экране блокировки", isOn: $settings.liveActivity).row()
+                if #available(iOS 26.0, *) {
+                    Toggle("Системная плашка iOS «продолжить в фоне»", isOn: $settings.systemContinue).row()
+                }
             } header: { SectionHeader(text: "Отклик") } footer: {
                 Hint(text: "Лёгкая отдача на каждый «залетевший» файл и прогресс выгрузки на экране блокировки и в Dynamic Island.")
             }

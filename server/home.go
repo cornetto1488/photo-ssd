@@ -140,6 +140,7 @@ func (t *tuyaClient) call(method, pathQuery, body string) (map[string]any, error
 type deviceState struct {
 	Code  string `json:"code"`
 	Value any    `json:"value"`
+	Time  int64  `json:"-"` // когда облако получило значение, мс
 }
 
 type homeDevice struct {
@@ -154,6 +155,12 @@ type homeDevice struct {
 	ProductID string       `json:"productId"`
 	Local    bool          `json:"local"` // управляется напрямую по сети
 	Status   []deviceState `json:"status"`
+	// для ламп: вычисленное состояние
+	Bright      int    `json:"bright,omitempty"` // 0..100, -1 неизвестно
+	Temp        int    `json:"temp,omitempty"`
+	Power       string `json:"power,omitempty"`       // on / off — питание от выключателя комнаты
+	PowerSwitch string `json:"powerSwitch,omitempty"` // имя этого выключателя
+	Guess       bool   `json:"guess,omitempty"`       // состояние вычислено, лампа сама не сообщает
 }
 
 type homePortal struct {
@@ -328,6 +335,7 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 		}(i)
 	}
 	wg.Wait()
+	p.inferLights(devs)
 	sort.SliceStable(devs, func(i, j int) bool {
 		if devs[i].Room != devs[j].Room {
 			return devs[i].Room < devs[j].Room
@@ -348,7 +356,8 @@ func (p *homePortal) state(id string) []deviceState {
 		for _, pr := range props {
 			pm, _ := pr.(map[string]any)
 			if v, ok := pm["value"]; ok {
-				st = append(st, deviceState{Code: fmt.Sprint(pm["code"]), Value: v})
+				t, _ := toNum(pm["time"])
+				st = append(st, deviceState{Code: fmt.Sprint(pm["code"]), Value: v, Time: int64(t)})
 			}
 		}
 	}
@@ -385,6 +394,17 @@ func (p *homePortal) command(id string, cmds []deviceState) error {
 		_, err = p.tuya.call("POST", "/v1.0/iot-03/devices/"+id+"/commands", string(body))
 	}
 	if err == nil {
+		isLight := false
+		p.devMu.Lock()
+		for _, d := range p.devs {
+			if d.ID == id && d.Kind == "light" {
+				isLight = true
+			}
+		}
+		p.devMu.Unlock()
+		if isLight {
+			p.rememberLight(id, cmds)
+		}
 		// Сразу обновим кэш, чтобы панель показала новое состояние.
 		p.devMu.Lock()
 		for i := range p.devs {
@@ -1100,6 +1120,11 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/passwords":    p.pw.handle,
 		"/api/home/system":       p.handleSystem,
 		"/api/home/weather":      p.handleWeather,
+		"/api/home/vpn":          p.handleVPN,
+		"/api/home/traffic":      p.handleTraffic,
+		"/api/home/speed":        p.handleSpeed,
+		"/api/home/notes":        p.handleNotes,
+		"/api/home/backup":       p.handleBackup,
 	}
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))

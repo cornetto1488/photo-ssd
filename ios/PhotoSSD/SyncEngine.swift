@@ -249,7 +249,7 @@ final class SyncEngine: NSObject, ObservableObject {
     func requestContinued() {
         #if compiler(>=6.2)
         if #available(iOS 26.0, *) {
-            guard continuedTask == nil, UIApplication.shared.applicationState == .active else { return }
+            guard AppSettings.shared.systemContinue, continuedTask == nil, UIApplication.shared.applicationState == .active else { return }
             let req = BGContinuedProcessingTaskRequest(identifier: Self.continuedTaskID,
                                                        title: "ZALET",
                                                        subtitle: "Выгрузка фото на SSD")
