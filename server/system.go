@@ -261,8 +261,7 @@ func wttrWeather() []byte {
 // routerInfo — модель, прошивка, адреса.
 func routerInfo() map[string]any {
 	rel := map[string]string{}
-	for _, l := range strings.Split(readFile("/etc/openwrt_release"), "
-") {
+	for _, l := range strings.Split(readFile("/etc/openwrt_release"), "\n") {
 		if k, v, ok := strings.Cut(l, "="); ok {
 			rel[k] = strings.Trim(v, "'\"")
 		}
@@ -286,8 +285,7 @@ func routerInfo() map[string]any {
 		tsIP = strings.TrimSpace(string(out))
 	}
 	clients := 0
-	for _, l := range strings.Split(readFile("/tmp/dhcp.leases"), "
-") {
+	for _, l := range strings.Split(readFile("/tmp/dhcp.leases"), "\n") {
 		if strings.TrimSpace(l) != "" {
 			clients++
 		}
