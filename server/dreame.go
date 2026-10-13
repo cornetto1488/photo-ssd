@@ -584,6 +584,10 @@ func (p *homePortal) handleDreameHistory(w http.ResponseWriter, r *http.Request)
 				it["suction"] = num(val)
 			case 13:
 				it["done"] = num(val) == 1
+			case 9:
+				if fn, ok := val.(string); ok {
+					it["file"] = fn
+				}
 			}
 		}
 		t, _ := it["t"].(int)
@@ -599,4 +603,54 @@ func (p *homePortal) handleDreameHistory(w http.ResponseWriter, r *http.Request)
 	}
 	c.hist, c.histAt = items, time.Now()
 	dreameReply(w, 200, map[string]any{"configured": true, "items": items})
+}
+
+// mapFile скачивает файл карты уборки: file = "объект,ключ". Возвращает содержимое и ключ шифрования. Под c.mu.
+func (c *dreameClient) mapFile(file string) (string, string, error) {
+	obj, key, _ := strings.Cut(file, ",")
+	if obj == "" {
+		return "", "", fmt.Errorf("у этой уборки нет карты")
+	}
+	r, err := c.call("dreame-user-iot/iotfile/getDownloadUrl", map[string]any{
+		"did": c.did, "model": c.model, "filename": obj, "region": c.cf.Country,
+	}, false)
+	if err != nil {
+		return "", "", err
+	}
+	u, _ := r["data"].(string)
+	if u == "" {
+		return "", "", fmt.Errorf("облако не дало ссылку на карту")
+	}
+	req, _ := http.NewRequest("GET", u, nil)
+	req.Header.Set("User-Agent", "okhttp/4.12.0")
+	resp, err := dreameHTTP.Do(req)
+	if err != nil {
+		return "", "", fmt.Errorf("не удалось скачать карту")
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	if resp.StatusCode != 200 {
+		return "", "", fmt.Errorf("файл карты: HTTP %d", resp.StatusCode)
+	}
+	return string(b), key, nil
+}
+
+// GET /api/home/dreame/mapraw?i=0 — сырой файл карты i-й уборки (для отладки декодера).
+func (p *homePortal) handleDreameMapRaw(w http.ResponseWriter, r *http.Request) {
+	dreameLoad()
+	i, _ := strconv.Atoi(r.URL.Query().Get("i"))
+	c := dreame
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.hist == nil || i < 0 || i >= len(c.hist) {
+		fail(w, http.StatusNotFound, "история не загружена")
+		return
+	}
+	f, _ := c.hist[i]["file"].(string)
+	content, key, err := c.mapFile(f)
+	if err != nil {
+		fail(w, http.StatusBadGateway, err.Error())
+		return
+	}
+	dreameReply(w, 200, map[string]any{"model": c.model, "key": key, "content": content, "item": c.hist[i]})
 }

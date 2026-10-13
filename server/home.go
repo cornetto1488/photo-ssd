@@ -1170,6 +1170,7 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/dreame/logout":  p.handleDreameLogout,
 		"/api/home/dreame/cmd":     p.handleDreameCmd,
 		"/api/home/dreame/history": p.handleDreameHistory,
+		"/api/home/dreame/mapraw":  p.handleDreameMapRaw,
 		"/api/cameras/scan":         homeCameraScan,
 		"/api/cameras/config":       homeCameraConfig,
 		"/api/cameras/session":      homeCameraSession,
