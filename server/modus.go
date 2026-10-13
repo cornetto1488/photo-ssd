@@ -19,19 +19,22 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strconv"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 )
 
 const (
+	modusLiveURL     = "https://api.modus-omsk.ru/api/clients/cameras/live-url"
 	modusAPIURL      = "https://api.modus-omsk.ru/api/clients/cameras/archive-url"
 	modusMaxPeriodMs = 24 * 60 * 60 * 1000
 	modusItemKeyFmt  = "cam:194.186.196.248:34567:%d"
 )
 
 type modusArchiveRequest struct {
+	Live    bool   `json:"live"` // прямой эфир: отдельный эндпоинт Modus live-url, период не нужен
+	Slot    string `json:"slot"` // "" — плеер, "h" — плитка главной (отдельный поток go2rtc)
 	Camera  int   `json:"camera"`
 	StartMs int64 `json:"start_ms"`
 	EndMs   int64 `json:"end_ms"`
@@ -62,13 +65,16 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
-	case p.Camera < 1 || p.Camera > 40:
-		modusError(w, http.StatusBadRequest, "Номер камеры должен быть от 1 до 40")
+	case p.Slot != "" && p.Slot != "h":
+		modusError(w, http.StatusBadRequest, "Некорректный слот")
 		return
-	case p.StartMs <= 0 || p.EndMs <= 0 || p.StartMs >= p.EndMs:
+	case p.Camera < 1 || p.Camera > 96:
+		modusError(w, http.StatusBadRequest, "Номер камеры должен быть от 1 до 96")
+		return
+	case !p.Live && (p.StartMs <= 0 || p.EndMs <= 0 || p.StartMs >= p.EndMs):
 		modusError(w, http.StatusBadRequest, "Некорректный период архива")
 		return
-	case p.EndMs-p.StartMs > modusMaxPeriodMs:
+	case !p.Live && p.EndMs-p.StartMs > modusMaxPeriodMs:
 		modusError(w, http.StatusBadRequest, "Период архива не должен превышать 24 часа")
 		return
 	}
@@ -84,7 +90,7 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if json.Valid(raw) {
 		// RTSP браузер не играет: регистрируем ссылку в go2rtc, фронт получит поле "stream".
-		if out := modusAttachStream(raw, p.Camera); out != nil {
+		if out := modusAttachStream(raw, p.streamName()); out != nil {
 			w.Write(out)
 			return
 		}
@@ -100,14 +106,20 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 
 // modusFetch просит у Modus ссылку на архив. При ошибке возвращает текст для браузера и HTTP-статус.
 func modusFetch(parent context.Context, sessionID string, p modusArchiveRequest) (raw []byte, status int, msg string) {
-	body, _ := json.Marshal(map[string]any{
+	apiURL := modusAPIURL
+	req0 := map[string]any{
 		"start_ms": p.StartMs,
 		"end_ms":   p.EndMs,
 		"item_key": fmt.Sprintf(modusItemKeyFmt, p.Camera),
-	})
+	}
+	if p.Live {
+		apiURL = modusLiveURL
+		req0 = map[string]any{"item_key": fmt.Sprintf(modusItemKeyFmt, p.Camera)}
+	}
+	body, _ := json.Marshal(req0)
 	ctx, cancel := context.WithTimeout(parent, 20*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, modusAPIURL, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, http.StatusInternalServerError, "Не удалось собрать запрос к Modus API"
 	}
@@ -147,31 +159,33 @@ func modusFetch(parent context.Context, sessionID string, p modusArchiveRequest)
 // берём свежую и повторяем запрос — браузер этого не замечает.
 var (
 	modusMu   sync.Mutex
-	modusLast = map[int]modusArchiveRequest{}
-	modusGen  = map[int]int{}
+	modusLast = map[string]modusArchiveRequest{}
+	modusGen  = map[string]int{}
 )
+
+func (p modusArchiveRequest) streamName() string { return fmt.Sprintf("cam%d%s", p.Camera, p.Slot) }
 
 func modusRemember(p modusArchiveRequest) {
 	modusMu.Lock()
-	modusLast[p.Camera] = p
-	modusGen[p.Camera]++
+	modusLast[p.streamName()] = p
+	modusGen[p.streamName()]++
 	modusMu.Unlock()
 }
 
-func modusGeneration(camera int) int {
+func modusGeneration(name string) int {
 	modusMu.Lock()
 	defer modusMu.Unlock()
-	return modusGen[camera]
+	return modusGen[name]
 }
 
 // modusForceRefresh берёт новую ссылку для camN, если с момента gen её никто не обновлял.
-func modusForceRefresh(ctx context.Context, camera, gen int) bool {
+func modusForceRefresh(ctx context.Context, name string, gen int) bool {
 	modusMu.Lock()
 	defer modusMu.Unlock()
-	if modusGen[camera] != gen {
+	if modusGen[name] != gen {
 		return true // параллельный запрос уже обновил
 	}
-	p, ok := modusLast[camera]
+	p, ok := modusLast[name]
 	if !ok {
 		return false
 	}
@@ -182,13 +196,13 @@ func modusForceRefresh(ctx context.Context, camera, gen int) bool {
 	now := time.Now().UnixMilli()
 	if p.EndMs > now { // прямой эфир: начинаем с текущей секунды
 		p.StartMs = now - 2000
-		modusLast[camera] = p
+		modusLast[name] = p
 	}
 	raw, _, msg := modusFetch(ctx, sessionID, p)
-	if msg != "" || modusAttachStream(raw, camera) == nil {
+	if msg != "" || modusAttachStream(raw, name) == nil {
 		return false
 	}
-	modusGen[camera]++
+	modusGen[name]++
 	return true
 }
 
@@ -196,17 +210,19 @@ const go2rtcAddr = "127.0.0.1:1984"
 
 // modusAttachStream кладёт playback_url (одноразовый, живёт ~60 с) в go2rtc как поток camN
 // и дописывает в ответ "stream":"camN". Если не получилось — nil, ответ уйдёт как есть.
-func modusAttachStream(raw []byte, camera int) []byte {
+func modusAttachStream(raw []byte, name string) []byte {
 	var doc map[string]any
 	if json.Unmarshal(raw, &doc) != nil {
 		return nil
 	}
 	data, _ := doc["data"].(map[string]any)
 	src, _ := data["playback_url"].(string)
+	if src == "" {
+		src, _ = data["live_url"].(string)
+	}
 	if !strings.HasPrefix(src, "rtsp://") {
 		return nil
 	}
-	name := fmt.Sprintf("cam%d", camera)
 	q := url.Values{"name": {name}, "src": {src}}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -224,7 +240,8 @@ func modusAttachStream(raw []byte, camera int) []byte {
 		log.Printf("modus: go2rtc ответил HTTP %d", resp.StatusCode)
 		return nil
 	}
-	delete(data, "playback_url") // сырую rtsp-ссылку с токеном браузеру не отдаём
+	delete(data, "playback_url")
+	delete(data, "live_url") // сырую rtsp-ссылку с токеном браузеру не отдаём
 	doc["stream"] = name
 	out, err := json.Marshal(doc)
 	if err != nil {
@@ -249,7 +266,7 @@ func homeCameraPlay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	src := r.URL.Query().Get("src")
-	if src != "" && !strings.HasPrefix(src, "cam") {
+	if src != "" && !go2rtcNameRe.MatchString(src) {
 		http.NotFound(w, r)
 		return
 	}
@@ -261,10 +278,9 @@ func homeCameraPlay(w http.ResponseWriter, r *http.Request) {
 		go2rtcProxy.ServeHTTP(w, r2)
 		return
 	}
-	cam, _ := strconv.Atoi(strings.TrimPrefix(src, "cam"))
-	target := "http://" + go2rtcAddr + rest + "?" + q.Encode()
+		target := "http://" + go2rtcAddr + rest + "?" + q.Encode()
 	for attempt := 0; ; attempt++ {
-		gen := modusGeneration(cam)
+		gen := modusGeneration(src)
 		req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, target, nil)
 		if err != nil {
 			http.Error(w, "bad request", http.StatusBadRequest)
@@ -280,7 +296,7 @@ func homeCameraPlay(w http.ResponseWriter, r *http.Request) {
 		if resp.StatusCode >= 500 {
 			io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
 			resp.Body.Close()
-			if attempt < 2 && modusForceRefresh(r.Context(), cam, gen) {
+			if attempt < 2 && modusForceRefresh(r.Context(), src, gen) {
 				continue
 			}
 			http.Error(w, "Не удалось подключиться к камере", http.StatusBadGateway)
@@ -312,6 +328,8 @@ func homeCameraPlay(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+var go2rtcNameRe = regexp.MustCompile(`^cam[0-9]{1,2}h?$`)
 
 var go2rtcStreamClient = &http.Client{} // без таймаута: поток живой
 
