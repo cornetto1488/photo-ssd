@@ -201,6 +201,8 @@ func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile, tokenFile str
 		p.proxy = httputil.NewSingleHostReverseProxy(u)
 	}
 	go p.schedLoop()
+	go p.statsLoop()
+	go startRTSPRelay()
 
 	go p.vpnLoop()
 	go s.gpsLoop()
@@ -340,6 +342,7 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 	}
 	wg.Wait()
 	p.inferLights(devs)
+	go p.statsLights(append([]homeDevice(nil), devs...))
 	sort.SliceStable(devs, func(i, j int) bool {
 		if devs[i].Room != devs[j].Room {
 			return devs[i].Room < devs[j].Room
@@ -1160,6 +1163,8 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/files/upload": p.s.handleFileUpload,
 		"/api/cameras/archive-url": homeCameraArchive, // архив камер Modus (modus.go)
 		"/api/cameras/play/":       homeCameraPlay,    // видео через go2rtc (modus.go)
+		"/api/home/stats/lights": p.handleStatsLights,
+		"/api/home/stats/net":    p.handleStatsNet,
 		"/api/cameras/scan":         homeCameraScan,
 		"/api/cameras/config":       homeCameraConfig,
 		"/api/cameras/session":      homeCameraSession,

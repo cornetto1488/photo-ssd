@@ -33,6 +33,7 @@ const (
 )
 
 type modusArchiveRequest struct {
+	Speed   int    `json:"speed"` // 0/1 — обычный темп, 2/4/8/16 — ускоренный архив (Scale)
 	Live    bool   `json:"live"` // прямой эфир: отдельный эндпоинт Modus live-url, период не нужен
 	Slot    string `json:"slot"` // "" — плеер, "h" — плитка главной (отдельный поток go2rtc)
 	Camera  int   `json:"camera"`
@@ -65,6 +66,9 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch {
+	case p.Speed != 0 && p.Speed != 1 && p.Speed != 2 && p.Speed != 4 && p.Speed != 8 && p.Speed != 16:
+		modusError(w, http.StatusBadRequest, "Скорость: 1, 2, 4, 8 или 16")
+		return
 	case p.Slot != "" && p.Slot != "h":
 		modusError(w, http.StatusBadRequest, "Некорректный слот")
 		return
@@ -90,7 +94,7 @@ func homeCameraArchive(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if json.Valid(raw) {
 		// RTSP браузер не играет: регистрируем ссылку в go2rtc, фронт получит поле "stream".
-		if out := modusAttachStream(raw, p.streamName()); out != nil {
+		if out := modusAttachStream(raw, p.streamName(), p.Speed); out != nil {
 			w.Write(out)
 			return
 		}
@@ -199,7 +203,7 @@ func modusForceRefresh(ctx context.Context, name string, gen int) bool {
 		modusLast[name] = p
 	}
 	raw, _, msg := modusFetch(ctx, sessionID, p)
-	if msg != "" || modusAttachStream(raw, name) == nil {
+	if msg != "" || modusAttachStream(raw, name, p.Speed) == nil {
 		return false
 	}
 	modusGen[name]++
@@ -210,7 +214,7 @@ const go2rtcAddr = "127.0.0.1:1984"
 
 // modusAttachStream кладёт playback_url (одноразовый, живёт ~60 с) в go2rtc как поток camN
 // и дописывает в ответ "stream":"camN". Если не получилось — nil, ответ уйдёт как есть.
-func modusAttachStream(raw []byte, name string) []byte {
+func modusAttachStream(raw []byte, name string, speed int) []byte {
 	var doc map[string]any
 	if json.Unmarshal(raw, &doc) != nil {
 		return nil
@@ -222,6 +226,9 @@ func modusAttachStream(raw []byte, name string) []byte {
 	}
 	if !strings.HasPrefix(src, "rtsp://") {
 		return nil
+	}
+	if speed > 1 && !strings.HasPrefix(src, rtspRelayPrefix) {
+		src = relayURL(src, speed)
 	}
 	q := url.Values{"name": {name}, "src": {src}}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

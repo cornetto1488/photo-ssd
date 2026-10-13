@@ -114,10 +114,17 @@ func (p *homePortal) handleTraffic(w http.ResponseWriter, r *http.Request) {
 
 var speedMu sync.Mutex
 
-func (p *homePortal) handleSpeed(w http.ResponseWriter, r *http.Request) {
+type speedRes struct {
+	Mbps   float64
+	Ping   int64
+	Bytes  int64
+	Server string
+}
+
+// runSpeedTest качает тестовые файлы до 8 с и считает скорость; одновременно идёт только один замер.
+func runSpeedTest() (speedRes, error) {
 	if !speedMu.TryLock() {
-		fail(w, http.StatusConflict, "замер уже идёт")
-		return
+		return speedRes{}, fmt.Errorf("замер уже идёт")
 	}
 	defer speedMu.Unlock()
 	urls := []string{
@@ -152,10 +159,23 @@ func (p *homePortal) handleSpeed(w http.ResponseWriter, r *http.Request) {
 		mbps := float64(n) * 8 / sec / 1e6
 		u2, _ := url.Parse(u)
 		log.Printf("панель: замер скорости %.0f Мбит/с (%s)", mbps, u2.Hostname())
-		writeJSON(w, http.StatusOK, map[string]any{"mbps": mbps, "ping": ping, "bytes": n, "server": u2.Hostname()})
+		return speedRes{Mbps: mbps, Ping: ping, Bytes: n, Server: u2.Hostname()}, nil
+	}
+	return speedRes{}, fmt.Errorf("не удалось замерить — серверы недоступны")
+}
+
+func (p *homePortal) handleSpeed(w http.ResponseWriter, r *http.Request) {
+	res, err := runSpeedTest()
+	if err != nil {
+		code := http.StatusBadGateway
+		if strings.Contains(err.Error(), "уже идёт") {
+			code = http.StatusConflict
+		}
+		fail(w, code, err.Error())
 		return
 	}
-	fail(w, http.StatusBadGateway, "не удалось замерить — серверы недоступны")
+	statsAppend("speed.jsonl", speedRec{T: time.Now().Unix(), Mbps: res.Mbps, Ping: res.Ping, Src: "manual"})
+	writeJSON(w, http.StatusOK, map[string]any{"mbps": res.Mbps, "ping": res.Ping, "bytes": res.Bytes, "server": res.Server})
 }
 
 // ---------- заметки и покупки ----------
