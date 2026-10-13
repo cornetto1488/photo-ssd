@@ -57,7 +57,6 @@
       <a data-page="pc">ПК</a>
       <a data-page="photos">Фото</a>
       <a data-page="logs">Журналы</a>
-      <a data-page="auto">Автоматика</a>
       <a data-page="vault">Пароли</a>
       <a data-page="router">Роутер</a>
       <a data-page="services">Сервисы</a>
@@ -130,7 +129,6 @@
       <div id="homeDay"></div>
       <div class="section-head">
         <div class="mono-label"><span class="acc">// ЛЕНТА</span> ЧТО ПРОИСХОДИЛО ДОМА</div>
-        <a class="btn btn-sm" data-page="auto">Автоматика →</a>
       </div>
       <div class="card events" id="homeEvents"></div>
 
@@ -303,25 +301,6 @@
       <div class="card log-card"><div class="log" id="log"></div></div>
     </section>
 
-    <!-- АВТОМАТИКА -->
-    <section class="page" id="page-auto">
-      <div class="page-head">
-        <div>
-          <div class="mono-label"><span class="acc">// 06</span> ДОМ САМ ПО СЕБЕ</div>
-          <h2 class="display">АВТОМАТИКА</h2>
-        </div>
-      </div>
-      <div class="section-head"><div class="mono-label"><span class="acc">// РАСПИСАНИЯ</span> <span id="schedNow"></span></div><button class="btn btn-sm btn-acc" id="schedAdd">＋ Расписание</button></div>
-      <div class="sched" id="schedList"></div>
-      <div class="section-head"><div class="mono-label"><span class="acc">// КТО ДОМА</span> ПО ТЕЛЕФОНАМ В WI-FI</div><button class="btn btn-sm" id="personAdd">＋ Человек</button></div>
-      <div class="people" id="peopleList"></div>
-      <div class="card pres-cfg" id="presCfg"></div>
-      <div class="section-head"><div class="mono-label"><span class="acc">// TELEGRAM</span> УВЕДОМЛЕНИЯ О ДОМЕ</div></div>
-      <div class="card" id="tgCard"></div>
-      <div class="section-head"><div class="mono-label"><span class="acc">// ЛЕНТА</span> ВСЕ СОБЫТИЯ</div></div>
-      <div class="card events" id="autoEvents"></div>
-    </section>
-
     <!-- ПАРОЛИ -->
     <section class="page" id="page-vault">
       <div class="page-head">
@@ -422,6 +401,7 @@
 
 <div id="toast" class="toast"></div>
 <script src="app.js"></script>
+<script src="netmap.js"></script>
 <script src="cozy.js"></script>
 <script src="vault.js"></script>
 <script src="access.js"></script>

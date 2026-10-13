@@ -201,7 +201,7 @@ func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile, tokenFile str
 		p.proxy = httputil.NewSingleHostReverseProxy(u)
 	}
 	go p.schedLoop()
-	go p.presenceLoop()
+
 	go p.vpnLoop()
 	go s.gpsLoop()
 	return p

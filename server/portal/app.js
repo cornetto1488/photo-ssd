@@ -541,82 +541,7 @@ function renderHouse() { netViz.update(); }
 
 // ---------- карта сети: роутер в центре, вокруг реальные устройства, по линиям бегут пакеты ----------
 async function loadClientsQuiet() { try { clients = (await api("/api/home/clients")).clients || []; netViz.update(); } catch (e) {} }
-const netViz = (() => {
-  const cv = $("#netCanvas"); const ctx = cv.getContext("2d");
-  let nodes = [], packets = [], W = 0, H = 0, dpr = 1, raf = 0, t0 = performance.now();
-  const COL = { pc: [255, 90, 31], dev: [59, 224, 140], cl: [154, 163, 214] };
-  function resize() {
-    const r = cv.getBoundingClientRect(); dpr = Math.min(2, window.devicePixelRatio || 1);
-    W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); layout();
-  }
-  function update() {
-    const list = [];
-    if (status) list.push({ id: "pc", label: "ПК", type: "pc", on: status.pc.online });
-    devices.filter((d) => d.kind !== "pc" && d.kind !== "gateway").forEach((d) =>
-      list.push({ id: d.id, label: d.name.replace("Лампочка", "Лампа"), type: "dev", on: d.online && !!(d.kind === "light" ? val(d, "switch_led") : val(d, "switch_1")), online: d.online }));
-    clients.filter((c) => c.online && c.ip !== status?.pc.ip).slice(0, window.innerWidth < 600 ? 14 : 24).forEach((c) =>
-      list.push({ id: c.mac, label: (c.name || c.ip.split(".").pop()).slice(0, 14), type: "cl", on: true }));
-    const old = Object.fromEntries(nodes.map((n) => [n.id, n]));
-    nodes = list.map((n, i) => ({ ...n, phase: old[n.id]?.phase ?? Math.random() * 6.28, i }));
-    $("#nvCount").textContent = `${nodes.filter((n) => n.type === "cl" || n.on).length} АКТИВНО`;
-    layout();
-  }
-  function layout() {
-    const cx = W / 2, cy = H / 2, n = nodes.length || 1;
-    nodes.forEach((nd, i) => {
-      const ring = nd.type === "cl" ? 0.42 : nd.type === "pc" ? 0.2 : 0.31;
-      const a = (i / n) * Math.PI * 2 - Math.PI / 2;
-      nd.bx = cx + Math.cos(a) * Math.min(W, H) * ring * 1.15; nd.by = cy + Math.sin(a) * Math.min(W, H) * ring;
-    });
-  }
-  function draw(now) {
-    const t = (now - t0) / 1000, cx = W / 2, cy = H / 2;
-    ctx.clearRect(0, 0, W, H);
-    // кольца-радар
-    for (let k = 1; k <= 3; k++) {
-      ctx.beginPath(); ctx.ellipse(cx, cy, Math.min(W, H) * (0.14 * k + 0.06) * 1.15, Math.min(W, H) * (0.14 * k + 0.06), 0, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(242,240,237,${0.05 - k * 0.008})`; ctx.lineWidth = 1; ctx.stroke();
-    }
-    const sweep = (t * 0.6) % (Math.PI * 2);
-    const grad = ctx.createConicGradient ? ctx.createConicGradient(sweep, cx, cy) : null;
-    if (grad) { grad.addColorStop(0, "rgba(255,90,31,.18)"); grad.addColorStop(0.08, "rgba(255,90,31,0)"); grad.addColorStop(1, "rgba(255,90,31,0)");
-      ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(cx, cy, Math.max(W, H), 0, Math.PI * 2); ctx.fill(); }
-    // связи и пакеты
-    nodes.forEach((nd) => {
-      nd.x = nd.bx + Math.sin(t * 0.7 + nd.phase) * 4; nd.y = nd.by + Math.cos(t * 0.6 + nd.phase) * 4;
-      const c = COL[nd.type], alpha = nd.on ? 0.35 : 0.1;
-      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(nd.x, nd.y);
-      ctx.strokeStyle = `rgba(${c},${alpha})`; ctx.lineWidth = nd.type === "pc" ? 1.6 : 1; ctx.setLineDash(nd.on ? [] : [3, 5]); ctx.stroke(); ctx.setLineDash([]);
-      if (nd.on && Math.random() < (nd.type === "pc" ? 0.05 : 0.02)) packets.push({ n: nd, p: 0, out: Math.random() < 0.5, sp: 0.5 + Math.random() * 0.6 });
-    });
-    packets = packets.filter((pk) => (pk.p += pk.sp * 0.016) < 1);
-    packets.forEach((pk) => {
-      const f = pk.out ? pk.p : 1 - pk.p, x = cx + (pk.n.x - cx) * f, y = cy + (pk.n.y - cy) * f, c = COL[pk.n.type];
-      ctx.beginPath(); ctx.arc(x, y, 2.2, 0, Math.PI * 2); ctx.fillStyle = `rgba(${c},.95)`; ctx.shadowColor = `rgb(${c})`; ctx.shadowBlur = 8; ctx.fill(); ctx.shadowBlur = 0;
-    });
-    // узлы
-    ctx.font = "500 10px 'JetBrains Mono', monospace"; ctx.textAlign = "center";
-    nodes.forEach((nd) => {
-      const c = COL[nd.type], r = nd.type === "pc" ? 7 : 4.5;
-      if (nd.on) { ctx.beginPath(); ctx.arc(nd.x, nd.y, r + 6 + Math.sin(t * 2 + nd.phase) * 2, 0, Math.PI * 2); ctx.fillStyle = `rgba(${c},.12)`; ctx.fill(); }
-      ctx.beginPath(); ctx.arc(nd.x, nd.y, r, 0, Math.PI * 2); ctx.fillStyle = nd.on ? `rgb(${c})` : "rgba(91,91,100,.9)"; ctx.fill();
-      ctx.fillStyle = nd.on ? "rgba(242,240,237,.85)" : "rgba(140,140,150,.6)"; ctx.fillText(nd.label, nd.x, nd.y + r + 13);
-    });
-    // роутер в центре
-    const pulse = 1 + Math.sin(t * 2.2) * 0.06;
-    const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, 46 * pulse); g.addColorStop(0, "rgba(255,138,76,.55)"); g.addColorStop(1, "rgba(255,90,31,0)");
-    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, 46 * pulse, 0, Math.PI * 2); ctx.fill();
-    ctx.save(); ctx.translate(cx, cy); ctx.rotate(Math.PI / 4);
-    const s = 26; const lg = ctx.createLinearGradient(-s / 2, -s / 2, s / 2, s / 2); lg.addColorStop(0, "#ff8a4c"); lg.addColorStop(1, "#ff5a1f");
-    ctx.fillStyle = lg; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(-s / 2, -s / 2, s, s, 7) : ctx.rect(-s / 2, -s / 2, s, s); ctx.fill(); ctx.restore();
-    ctx.fillStyle = "rgba(242,240,237,.9)"; ctx.font = "700 11px 'Onest', sans-serif"; ctx.fillText("РОУТЕР", cx, cy + 34);
-    raf = requestAnimationFrame(draw);
-  }
-  function start() { resize(); cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); }
-  window.addEventListener("resize", () => { if (W) resize(); });
-  document.addEventListener("visibilitychange", () => { if (document.hidden) cancelAnimationFrame(raf); else if (W) raf = requestAnimationFrame(draw); });
-  return { start, update };
-})();
+// карта сети — в netmap.js
 function renderMarquee() {
   const s = status; if (!s) return;
   const sv = s.services;
@@ -786,7 +711,7 @@ function start() {
   timers.sites = setInterval(checkSites, 60000);
   timers.netc = setInterval(loadClientsQuiet, 20000);
   const p = (location.hash || "#home").slice(1);
-  go(["home", "devices", "pc", "photos", "network", "router", "logs", "vault", "access", "services", "auto"].includes(p) ? p : "home");
+  go(["home", "devices", "pc", "photos", "network", "router", "logs", "vault", "access", "services"].includes(p) ? p : "home");
   timers.status = setInterval(() => { if (["home", "pc", "services"].includes(page)) loadStatus(); }, 10000);
   timers.devs = setInterval(() => { if (page === "devices") loadDevices(); }, 15000);
   timers.logs = setInterval(() => { if (page === "logs" && $("#logLive").checked) loadLogs(); }, 4000);

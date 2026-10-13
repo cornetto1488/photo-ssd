@@ -10,7 +10,6 @@ go = function (p) {
   _go(p);
   clearInterval(timers.agents);
   if (p === "pc") { loadAgents(); timers.agents = setInterval(loadAgents, 5000); }
-  if (p === "auto") loadAuto();
   if (p === "photos") photoTab(curPhotoTab, true);
   if (p === "router") loadUSB();
   if (p === "home") { loadHomeDay(); loadEvents("#homeEvents", 8); }
@@ -296,120 +295,6 @@ async function loadEvents(sel, n) {
   let r; try { r = await api("/api/home/events"); } catch (e) { return; }
   const list = (r.events || []).slice(0, n || 150);
   $(sel).innerHTML = list.map((e) => `<div class="ev"><i>${EV_ICON[e.kind] || "•"}</i><span>${esc(e.text)}</span><em>${new Date(e.t * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</em></div>`).join("") || `<p class="muted small">Пока тихо. Здесь появятся события: кто пришёл и ушёл, что включилось по расписанию, как себя чувствует VPN.</p>`;
-}
-
-// ---------- автоматика ----------
-const DAYS_RU = ["вс", "пн", "вт", "ср", "чт", "пт", "сб"];
-const ACT_RU = { on: "Включить", off: "Выключить", alloff: "Выключить весь свет", "pc-on": "Включить ПК", "pc-off": "Выключить ПК", "pc-sleep": "Усыпить ПК" };
-let scheds = [], pres = null, tg = null;
-async function loadAuto() {
-  if (!devices.length) await loadDevices();
-  if (!clients.length) try { clients = (await api("/api/home/clients")).clients || []; } catch (e) {}
-  try { const r = await api("/api/home/schedules"); scheds = r.schedules; $("#schedNow").textContent = `· СЕЙЧАС ${r.now} (${r.tz})`; } catch (e) {}
-  try { pres = await api("/api/home/presence"); } catch (e) {}
-  try { tg = await api("/api/home/telegram"); } catch (e) {}
-  renderScheds(); renderPeople(); renderTG(); loadEvents("#autoEvents", 150);
-}
-const devName = (id) => devices.find((d) => d.id === id)?.name || "устройство";
-function renderScheds() {
-  $("#schedList").innerHTML = scheds.map((s) => `<div class="sc ${s.enabled ? "" : "off"}" data-sid="${s.id}">
-      <div class="sc-time display">${esc(s.time)}</div>
-      <div class="sc-main"><b>${esc(s.name || ACT_RU[s.action])}</b><span>${ACT_RU[s.action] || s.action}${s.device ? " · " + esc(devName(s.device)) : ""} · ${s.days?.length ? s.days.map((d) => DAYS_RU[d]).join(", ") : "каждый день"}${s.lastRun ? " · было " + ago(s.lastRun) : ""}</span></div>
-      <label class="switch"><input type="checkbox" data-sa="toggle" ${s.enabled ? "checked" : ""}><i></i></label>
-      <button class="icon-btn" data-sa="run" title="Выполнить сейчас">▶</button><button class="icon-btn" data-sa="edit" title="Изменить">✎</button><button class="icon-btn" data-sa="del" title="Удалить">✕</button></div>`).join("") ||
-    `<p class="muted small">Например: «каждый день в 23:30 выключить весь свет» или «в будни в 7:00 включить свет в ванной».</p>`;
-  $$("#schedList [data-sa]").forEach((b) => {
-    const ev = b.type === "checkbox" ? "onchange" : "onclick";
-    b[ev] = async () => {
-      const s = scheds.find((x) => x.id === b.closest("[data-sid]").dataset.sid), a = b.dataset.sa;
-      if (a === "edit") return editSched(s);
-      if (a === "del" && !(await askConfirm({ icon: "⏰", title: "Удалить расписание?", text: s.name || s.time, yes: "Удалить", danger: true }))) return;
-      const body = a === "toggle" ? { action: "save", schedule: { ...s, enabled: b.checked } } : { action: a === "del" ? "delete" : "run", schedule: s };
-      try { scheds = (await post("/api/home/schedules", body)).schedules; if (a === "run") toast("Выполняю…"); renderScheds(); } catch (e) { toast(e.message, true); }
-    };
-  });
-}
-$("#schedAdd").onclick = () => editSched(null);
-function editSched(s) {
-  s = s || { name: "", time: "23:30", days: [], action: "alloff", device: "", enabled: true };
-  const ctrl = devices.filter((d) => ["light", "switch", "plug"].includes(d.kind));
-  openForm('<span class="acc">// РАСПИСАНИЕ</span>', s.id ? "Изменить" : "Новое расписание", `<form class="form" id="scForm">
-    <div class="form-2"><label>Время<input class="field" type="time" id="scTime" value="${esc(s.time)}" required></label><label>Название<input class="field" id="scName" value="${esc(s.name)}" placeholder="Отбой"></label></div>
-    <label>Что сделать<select class="field" id="scAct">${Object.entries(ACT_RU).map(([k, v]) => `<option value="${k}" ${s.action === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-    <label id="scDevL">Устройство<select class="field" id="scDev">${ctrl.map((d) => `<option value="${d.id}" ${s.device === d.id ? "selected" : ""}>${esc(d.name)}${d.room ? " · " + esc(d.room) : ""}</option>`).join("")}</select></label>
-    <label>Дни (ничего не выбрано — каждый день)<div class="days" id="scDays">${[1, 2, 3, 4, 5, 6, 0].map((d) => `<button type="button" data-d="${d}" class="${s.days?.includes(d) ? "active" : ""}">${DAYS_RU[d]}</button>`).join("")}</div></label>
-    <div class="chips small-chips"><button type="button" class="chip" data-dp="1,2,3,4,5">будни</button><button type="button" class="chip" data-dp="6,0">выходные</button><button type="button" class="chip" data-dp="">каждый день</button></div>
-    <div class="form-acts"><button class="btn btn-acc">Сохранить</button></div></form>`, () => {
-    const sync = () => { $("#scDevL").style.display = ["on", "off"].includes($("#scAct").value) ? "" : "none"; };
-    $("#scAct").onchange = sync; sync();
-    $$("#scDays button").forEach((b) => b.onclick = () => b.classList.toggle("active"));
-    $$("[data-dp]").forEach((c) => c.onclick = () => { const set = c.dataset.dp ? c.dataset.dp.split(",").map(Number) : []; $$("#scDays button").forEach((b) => b.classList.toggle("active", set.includes(Number(b.dataset.d)))); });
-    $("#scForm").onsubmit = async (e) => {
-      e.preventDefault();
-      const sc = { ...s, time: $("#scTime").value, name: $("#scName").value.trim(), action: $("#scAct").value, device: ["on", "off"].includes($("#scAct").value) ? $("#scDev").value : "",
-        days: $$("#scDays button.active").map((b) => Number(b.dataset.d)) };
-      try { scheds = (await post("/api/home/schedules", { action: "save", schedule: sc })).schedules; closeForm(); renderScheds(); toast("Сохранено"); } catch (er) { toast(er.message, true); }
-    };
-  });
-}
-function renderPeople() {
-  if (!pres) return;
-  $("#peopleList").innerHTML = pres.people.map((p) => `<div class="person ${p.home ? "home" : ""}" data-pid="${p.id}"><div class="av" style="--h:${[...p.name].reduce((a, c) => a + c.charCodeAt(0), 0) % 360}">${esc(p.name[0] || "?")}</div>
-      <div><b>${esc(p.name)}</b><span>${p.home ? "🏠 дома" : "вне дома"}${p.since ? " · с " + new Date(p.since * 1000).toLocaleString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}</span></div>
-      <button class="icon-btn" data-pa="edit">✎</button><button class="icon-btn" data-pa="del">✕</button></div>`).join("") ||
-    `<p class="muted small">Добавьте себя и близких: выберите их телефоны из списка устройств сети. Роутер будет знать, кто дома, и сможет сам выключать свет, когда все ушли.</p>`;
-  $$("#peopleList [data-pa]").forEach((b) => b.onclick = async () => {
-    const p = pres.people.find((x) => x.id === b.closest("[data-pid]").dataset.pid);
-    if (b.dataset.pa === "edit") return editPerson(p);
-    if (!(await askConfirm({ icon: "🏠", title: `Убрать ${p.name}?`, yes: "Убрать", danger: true }))) return;
-    pres = await post("/api/home/presence", { action: "delete", person: p }); renderPeople();
-  });
-  const ctrl = devices.filter((d) => ["light", "switch", "plug"].includes(d.kind));
-  $("#presCfg").innerHTML = `<div class="mono-label">АВТОМАТИКА ПО ПРИСУТСТВИЮ</div>
-    <label class="flag"><input type="checkbox" id="pcAway" ${pres.awayAllOff ? "checked" : ""}><span>Все ушли — выключить весь свет</span></label>
-    <label class="flag"><input type="checkbox" id="pcNight" ${pres.arriveNight ? "checked" : ""}><span>Включать свет при возвращении только вечером и ночью (17:00–7:00)</span></label>
-    <div class="mono-label" style="margin-top:6px">КТО-ТО ПРИШЁЛ В ПУСТОЙ ДОМ — ВКЛЮЧИТЬ:</div>
-    <div class="chips">${ctrl.map((d) => `<button class="chip ${pres.arriveOn?.includes(d.id) ? "active" : ""}" data-ao="${d.id}">${esc(d.name)}</button>`).join("")}</div>`;
-  const save = async () => { pres = await post("/api/home/presence", { action: "settings", cfg: { awayAllOff: $("#pcAway").checked, arriveNight: $("#pcNight").checked, arriveOn: $$("#presCfg [data-ao].active").map((c) => c.dataset.ao) } }); toast("Сохранено"); };
-  $("#pcAway").onchange = save; $("#pcNight").onchange = save;
-  $$("#presCfg [data-ao]").forEach((c) => c.onclick = () => { c.classList.toggle("active"); save(); });
-}
-$("#personAdd").onclick = () => editPerson(null);
-function editPerson(p) {
-  p = p || { name: "", macs: [] };
-  const list = [...clients].sort((a, b) => (b.online - a.online) || (a.name || "").localeCompare(b.name || "", "ru"));
-  openForm('<span class="acc">// КТО ДОМА</span>', p.id ? p.name : "Новый человек", `<form class="form" id="peForm">
-    <label>Имя<input class="field" id="peName" value="${esc(p.name)}" placeholder="Андрей" required></label>
-    <label>Его устройства (обычно — телефон)<div class="pick">${list.map((c) => `<label class="flag"><input type="checkbox" value="${esc(c.mac)}" ${p.macs.includes(c.mac.toUpperCase()) ? "checked" : ""}><span>${c.online ? "🟢" : "⚪"} ${esc(c.name || "без имени")} <em class="mono">${esc(c.ip)}</em></span></label>`).join("")}</div></label>
-    <p class="muted small">У iPhone в настройках Wi-Fi есть «Частный адрес» — для домашней сети его лучше выключить или выбрать «Фиксированный», иначе адрес иногда меняется.</p>
-    <div class="form-acts"><button class="btn btn-acc">Сохранить</button></div></form>`, () => {
-    $("#peForm").onsubmit = async (e) => { e.preventDefault(); const macs = $$("#peForm .pick input:checked").map((i) => i.value);
-      if (!macs.length) { toast("Выберите хотя бы одно устройство", true); return; }
-      pres = await post("/api/home/presence", { action: "person", person: { ...p, name: $("#peName").value.trim(), macs } }); closeForm(); renderPeople(); };
-  });
-}
-const TG_KINDS = { vpn: "VPN упал / ожил, подписка кончается", pc: "Компьютер появился на связи", presence: "Кто пришёл и ушёл", schedule: "Срабатывания расписаний", system: "Важное от роутера" };
-function renderTG() {
-  if (!tg) return;
-  const el = $("#tgCard");
-  if (!tg.configured) {
-    el.innerHTML = `<p class="muted small">Уведомления придут в Telegram: «VPN упал», «подписка кончается», «Андрей дома», «ПК включился».</p>
-      <ol class="steps"><li>Откройте в Telegram <a class="link" href="https://t.me/BotFather" target="_blank" rel="noopener">@BotFather</a> → <code>/newbot</code> → придумайте имя. Он пришлёт токен.</li><li>Вставьте токен сюда:</li></ol>
-      <form class="note-form" id="tgForm"><input class="field mono" id="tgToken" placeholder="123456789:AA…" autocomplete="off"><button class="btn btn-acc btn-sm">OK</button></form>`;
-    $("#tgForm").onsubmit = async (e) => { e.preventDefault(); try { const r = await post("/api/home/telegram", { action: "token", token: $("#tgToken").value }); toast("Бот @" + r.bot + " подключён"); tg = await api("/api/home/telegram"); renderTG(); } catch (er) { toast(er.message, true); } };
-    return;
-  }
-  if (!tg.connected) {
-    el.innerHTML = `<p>Бот готов. Теперь <b>напишите ему любое сообщение</b> в Telegram и нажмите:</p><div class="kv-btns"><button class="btn btn-acc" id="tgDetect">Найти мой чат</button><button class="btn btn-sm" id="tgOff">Отключить</button></div>`;
-    $("#tgDetect").onclick = async () => { try { await post("/api/home/telegram", { action: "detect" }); toast("Готово — проверьте Telegram"); tg = await api("/api/home/telegram"); renderTG(); } catch (er) { toast(er.message, true); } };
-  } else {
-    el.innerHTML = `<div class="mono-label"><span class="dot ok"></span> ПОДКЛЮЧЕНО · ЧТО ПРИСЫЛАТЬ</div>
-      ${Object.entries(TG_KINDS).map(([k, v]) => `<label class="flag"><input type="checkbox" data-tk="${k}" ${tg.kinds?.[k] ? "checked" : ""}><span>${v}</span></label>`).join("")}
-      <div class="kv-btns"><button class="btn btn-sm" id="tgTest">Отправить проверку</button><button class="btn btn-sm btn-danger" id="tgOff">Отключить</button></div>`;
-    $$("[data-tk]").forEach((c) => c.onchange = async () => { tg = await post("/api/home/telegram", { action: "kinds", kinds: { [c.dataset.tk]: c.checked } }); });
-    $("#tgTest").onclick = async () => { try { await post("/api/home/telegram", { action: "test" }); toast("Отправлено"); } catch (er) { toast(er.message, true); } };
-  }
-  $("#tgOff").onclick = async () => { if (await askConfirm({ icon: "✕", title: "Отключить уведомления?", yes: "Отключить", danger: true })) { tg = await post("/api/home/telegram", { action: "off" }); renderTG(); } };
 }
 
 // ---------- флешка ----------
