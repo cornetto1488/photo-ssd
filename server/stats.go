@@ -98,9 +98,9 @@ type lightEv struct {
 }
 
 var (
-	lightMemMu sync.Mutex
-	lightMem   = map[string]bool{}
-	lightInit  bool
+	statsLMu sync.Mutex
+	statsLMem   = map[string]bool{}
+	statsLInit  bool
 )
 
 // deviceOn — горит ли устройство (выключатель / розетка / лампа).
@@ -132,14 +132,14 @@ func deviceOn(d homeDevice) (on, known bool) {
 
 // statsLights вызывается после каждого свежего опроса устройств и пишет только изменения.
 func (p *homePortal) statsLights(devs []homeDevice) {
-	lightMemMu.Lock()
-	defer lightMemMu.Unlock()
-	if !lightInit {
-		lightInit = true
+	statsLMu.Lock()
+	defer statsLMu.Unlock()
+	if !statsLInit {
+		statsLInit = true
 		statsRead("lights.jsonl", 0, func(raw []byte) {
 			var e lightEv
 			if json.Unmarshal(raw, &e) == nil {
-				lightMem[e.ID] = e.On
+				statsLMem[e.ID] = e.On
 			}
 		})
 	}
@@ -155,10 +155,10 @@ func (p *homePortal) statsLights(devs []homeDevice) {
 		if !known {
 			continue
 		}
-		if prev, ok := lightMem[d.ID]; ok && prev == on {
+		if prev, ok := statsLMem[d.ID]; ok && prev == on {
 			continue
 		}
-		lightMem[d.ID] = on
+		statsLMem[d.ID] = on
 		statsAppend("lights.jsonl", lightEv{T: now, ID: d.ID, Name: d.Name, Room: d.Room, Kind: d.Kind, On: on})
 	}
 }
