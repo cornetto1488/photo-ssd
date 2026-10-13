@@ -14,6 +14,11 @@ function kioskBuild() {
         <div class="k-time" id="kTime">--:--</div>
         <div class="k-date" id="kDate"></div>
         <div class="k-weather" id="kWeather"></div>
+        <div class="k-light" id="kLight">
+          <div class="k-light-head"><span class="k-lab">💡 СВЕТ <em id="kLightMsg"></em></span>
+            <div class="k-light-all"><button class="k-btn on" data-kl="on">☀ Включить всё</button><button class="k-btn off" data-kl="off">🌙 Выключить всё</button></div></div>
+          <div class="k-rooms" id="kRooms"></div>
+        </div>
         <div class="k-tiles" id="kTiles"></div>
       </div>
       <div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div>
@@ -85,6 +90,74 @@ async function kioskTicker() {
   clearInterval(kk.tick); show(); kk.tick = setInterval(show, 7000); kk.timers.push(kk.tick);
 }
 
+// ---- свет: всё сразу и по комнатам ----
+const kLampOn = (d) => d.kind === "light" ? !!kVal(d, "switch_led") : !!kVal(d, "switch_1");
+const kVal = (d, code) => { const s = (d.status || []).find((x) => x.code === code); return s ? s.value : undefined; };
+function kRoomsMap() {
+  const rooms = {};
+  (kk.devs || []).filter((d) => d.kind === "light" || d.kind === "switch").forEach((d) => { const r = d.room || "Без комнаты"; (rooms[r] ||= { name: r, lights: [], switches: [] })[d.kind === "light" ? "lights" : "switches"].push(d); });
+  return Object.values(rooms).sort((a, b) => a.name.localeCompare(b.name, "ru"));
+}
+async function kioskDevices(fresh) {
+  try { kk.devs = (await api("/api/home/devices" + (fresh ? "?fresh=1" : ""))).devices || []; } catch (e) { return; }
+  if (kk.on) kioskRenderRooms();
+}
+function kioskRenderRooms() {
+  const box = $("#kRooms"); if (!box) return;
+  const rooms = kRoomsMap();
+  box.innerHTML = rooms.map((r) => {
+    const lampsOn = r.lights.filter(kLampOn).length, swOn = r.switches.some(kLampOn);
+    const on = lampsOn > 0 || (!r.lights.length && swOn);
+    const sub = r.lights.length ? lampsOn + " из " + r.lights.length : (swOn ? "включён" : "выключен");
+    return '<button class="k-room' + (on ? " on" : "") + '" data-room="' + kEsc(r.name) + '"><b>' + kEsc(r.name) + "</b><small>" + sub + "</small></button>";
+  }).join("") || '<span class="muted">Устройства света не найдены</span>';
+  $$("[data-room]", box).forEach((b) => b.onclick = () => {
+    const r = rooms.find((x) => x.name === b.dataset.room); if (!r) return;
+    const on = !(r.lights.some(kLampOn) || (!r.lights.length && r.switches.some(kLampOn)));
+    kioskPower(rooms.filter((x) => x === r), on, r.name + (on ? ": включаю…" : ": выключаю…"));
+  });
+}
+async function kioskPower(rooms, on, msg) {
+  if (kk.busy) return; kk.busy = true;
+  const m = $("#kLightMsg"); if (m) { m.textContent = msg || ""; m.className = "busy"; }
+  $$(".k-btn, .k-room", $("#kLight")).forEach((b) => b.disabled = true);
+  const send = (d, code, v) => post("/api/home/command", { id: d.id, commands: [{ code, value: v }] }).then(() => { const s = (d.status ||= []).find((x) => x.code === code); if (s) s.value = v; else d.status.push({ code, value: v }); return true; }).catch(() => false);
+  const results = [];
+  try {
+    const lights = rooms.flatMap((r) => r.lights).filter((d) => d.online), sws = rooms.flatMap((r) => r.switches).filter((d) => d.online);
+    if (on) {
+      // сначала питание (выключатели комнат), потом лампы
+      if (sws.length) { results.push(...await Promise.all(sws.map((d) => send(d, "switch_1", true)))); if (lights.some((d) => d.power === "off" || sws.length)) await new Promise((r) => setTimeout(r, 2500)); }
+      results.push(...await Promise.all(lights.map((d) => send(d, "switch_led", true))));
+    } else {
+      // сначала лампы, затем выключатели
+      results.push(...await Promise.all(lights.map((d) => send(d, "switch_led", false))));
+      results.push(...await Promise.all(sws.map((d) => send(d, "switch_1", false))));
+    }
+    const bad = results.filter((x) => !x).length;
+    if (m) { m.textContent = bad ? "не ответили: " + bad : (on ? "включено" : "выключено"); m.className = bad ? "bad" : "ok"; }
+  } catch (e) { if (m) { m.textContent = "ошибка"; m.className = "bad"; } }
+  finally {
+    kk.busy = false;
+    $$(".k-btn", $("#kLight")).forEach((b) => b.disabled = false);
+    setTimeout(() => { const mm = $("#kLightMsg"); if (mm) { mm.textContent = ""; mm.className = ""; } }, 4000);
+    kioskRenderRooms(); setTimeout(() => kioskDevices(true), 2500);
+  }
+}
+function kioskLightBind() {
+  $$("[data-kl]", $("#kLight")).forEach((b) => b.onclick = async () => {
+    const on = b.dataset.kl === "on";
+    if (!on) { // «выключить всё» — штатная команда панели (лампы, выключатели, розетки)
+      if (kk.busy) return; kk.busy = true; const m = $("#kLightMsg"); m.textContent = "выключаю всё…"; m.className = "busy";
+      try { const r = await post("/api/home/alloff"); m.textContent = "выключено: " + r.done + (r.failed ? ", не ответили: " + r.failed : ""); m.className = r.failed ? "bad" : "ok"; }
+      catch (e) { m.textContent = "ошибка"; m.className = "bad"; }
+      kk.busy = false; setTimeout(() => { m.textContent = ""; m.className = ""; }, 4000); setTimeout(() => kioskDevices(true), 1500);
+      return;
+    }
+    kioskPower(kRoomsMap(), true, "включаю весь свет…");
+  });
+}
+
 // ---- камеры ----
 function kioskStopCams() {
   kk.gen++;
@@ -127,6 +200,7 @@ function kioskStart() {
   [2500, 8000, 20000].forEach((ms) => setTimeout(() => { if (kk.on) kioskWeather(); }, ms)); // погода подгружается чуть позже
   kk.timers.push(setInterval(kioskClock, 1000));
   kioskTiles(); kk.timers.push(setInterval(kioskTiles, 30000));
+  kioskLightBind(); kioskDevices(false); kk.timers.push(setInterval(() => { if (!kk.busy) kioskDevices(false); }, 45000));
   kk.timers.push(setInterval(kioskWeather, 60000));
   kioskMap(); kk.timers.push(setInterval(kioskMap, 10 * 60000));
   kioskTicker(); kk.timers.push(setInterval(kioskTicker, 90000));
