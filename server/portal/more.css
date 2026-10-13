@@ -186,3 +186,4 @@ body.winter .snow { display: block; }
 .albums-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .albums-row.big { grid-template-columns: minmax(200px, 320px); }
 .albums-row.big .cover { aspect-ratio: 16/10; }
+.door-ok { background: linear-gradient(135deg, #5cf0a8, var(--live)) !important; box-shadow: 0 6px 24px rgba(59,224,140,.4) !important; }

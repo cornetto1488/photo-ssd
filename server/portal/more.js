@@ -364,3 +364,15 @@ moodClasses(); setInterval(moodClasses, 60000);
   };
   requestAnimationFrame(draw);
 })();
+
+// ---------- домофон «Модус» ----------
+(async () => {
+  try { const d = await api("/api/home/door"); if (d.configured) $$("[data-door]").forEach((b) => b.classList.remove("hidden")); } catch (e) {}
+})();
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-door]"); if (!b || b.disabled) return;
+  b.disabled = true; const txt = b.textContent; b.textContent = "Открываю…"; buzz(15);
+  try { await post("/api/home/door"); b.textContent = "✓ Открыто"; b.classList.add("door-ok"); toast("🚪 Подъезд открыт"); buzz([20, 40, 20]); }
+  catch (er) { b.textContent = txt; toast(er.message, true); }
+  setTimeout(() => { b.textContent = txt; b.classList.remove("door-ok"); b.disabled = false; }, 4000);
+});

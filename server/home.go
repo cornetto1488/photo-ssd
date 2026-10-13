@@ -1154,6 +1154,7 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/places":       p.s.handlePlaces,
 		"/api/home/place":        p.s.handlePlaceItems,
 		"/api/home/albums":       p.s.handleSmartAlbums,
+		"/api/home/door":         p.handleDoor,
 		"/api/home/files":        p.s.handleFiles,
 		"/api/home/files/get":    p.s.handleFileGet,
 		"/api/home/files/upload": p.s.handleFileUpload,
