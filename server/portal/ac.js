@@ -123,13 +123,29 @@ async function vacMiniRender() {
   const s = j && j.status; if (!s) { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
   const cl = typeof DR_CLEANING !== "undefined" && DR_CLEANING.has(s.state);
-  el.innerHTML = '<div class="ac' + (cl ? " on" : " off") + '"><div class="ac-top"><div class="ac-ttl"><span class="k-lab">ПЫЛЕСОС</span><b>Dreame L40 Ultra</b><small>' + acEsc(s.stateText || "") + " · батарея " + s.battery + "%" + (cl ? " · " + s.cleanArea + " м²" : "") + "</small></div></div>" +
-    '<div class="ac-chips"><button class="ac-chip' + (cl ? " on" : "") + '" data-vac="start">▶ Убрать</button><button class="ac-chip" data-vac="pause">⏸ Пауза</button><button class="ac-chip" data-vac="dock">⌂ На базу</button><button class="ac-chip" data-vac="locate">⌖ Найти</button></div></div>';
-  $$("[data-vac]", el).forEach((b) => b.onclick = async () => {
-    b.disabled = true;
-    try { await post("/api/home/dreame/cmd", { action: b.dataset.vac }); if (typeof toast === "function") toast({ start: "Поехал убирать", pause: "Пауза", dock: "Возвращается на базу", locate: "Пылесос подаёт сигнал" }[b.dataset.vac]); setTimeout(vacMiniRender, 2500); }
-    catch (e) { if (typeof toast === "function") toast(e.message, true); b.disabled = false; }
-  });
+  if (!el.dataset.built) {
+    el.dataset.built = "1";
+    el.innerHTML = '<div class="ac vac"><div class="ac-top"><div class="ac-ttl"><span class="k-lab">ПЫЛЕСОС</span><b>Dreame L40 Ultra</b><small class="vac-st"></small></div></div>' +
+      '<div class="ac-temp vac-stat"><div class="ac-set"><b class="vac-bat">—</b><small class="vac-area"></small></div></div>' +
+      '<div class="ac-row"><span class="k-lab">УПРАВЛЕНИЕ</span><div class="ac-chips"><button class="ac-chip" data-vac="start">▶ Убрать</button><button class="ac-chip" data-vac="pause">⏸ Пауза</button><button class="ac-chip" data-vac="dock">⌂ На базу</button><button class="ac-chip" data-vac="locate">⌖ Найти</button></div></div>' +
+      '<div class="vac-map"><canvas id="devVacMap"></canvas></div></div>';
+    $$("[data-vac]", el).forEach((b) => b.onclick = async () => {
+      b.disabled = true;
+      try { await post("/api/home/dreame/cmd", { action: b.dataset.vac }); if (typeof toast === "function") toast({ start: "Поехал убирать", pause: "Пауза", dock: "Возвращается на базу", locate: "Пылесос подаёт сигнал" }[b.dataset.vac]); setTimeout(vacMiniRender, 2500); }
+      catch (e) { if (typeof toast === "function") toast(e.message, true); }
+      b.disabled = false;
+    });
+    if (typeof dmLoad === "function" && typeof DreameMap3D === "function") dmLoad().then((c) => {
+      const cv = $("#devVacMap"); if (!cv) return;
+      acx.vmap = new DreameMap3D(cv, { autoRotate: false, interactive: false, labels: false, cache: true, replayMs: 8000 });
+      acx.vmap.yaw = -0.6; acx.vmap.setNames(c.names); acx.vmap.setData(c.map);
+    }).catch(() => { const m = $(".vac-map", el); if (m) m.classList.add("hidden"); });
+  }
+  $(".ac", el).classList.toggle("on", cl); $(".ac", el).classList.toggle("off", !cl);
+  $(".vac-st", el).textContent = (s.stateText || "") + (cl ? " · убрано " + s.cleanArea + " м²" : "");
+  $(".vac-bat", el).textContent = s.battery + "%";
+  $(".vac-area", el).textContent = cl ? "идёт уборка" : "заряд батареи";
+  $('[data-vac="start"]', el).classList.toggle("on", cl);
 }
 
 const _goAc = go;

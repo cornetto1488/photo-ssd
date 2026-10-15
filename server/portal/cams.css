@@ -628,3 +628,13 @@ html.wp .k-time i { color: var(--wp-or, #ff5a1f) !important; }
 /* страница «Устройства»: климат и пылесос над комнатами */
 .dev-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 6px 0 22px; align-items: start; }
 .dev-extra .hidden { display: none; }
+
+/* «Устройства»: карточки кондиционера и пылесоса одинаковой высоты и стиля */
+.dev-extra { align-items: stretch; }
+.dev-extra > div { display: flex; min-width: 0; }
+.dev-extra > div > .ac, .dev-extra > div > .card { flex: 1; }
+.dev-extra .ac { justify-content: space-between; }
+.vac-map { position: relative; flex: 1 1 200px; min-height: 200px; border-radius: 18px; background: #050507; border: 1px solid var(--line, rgba(255,255,255,.075)); overflow: hidden; }
+.vac-map canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.vac-map.hidden { display: none; }
+.vac-stat .ac-set b { font-size: clamp(46px, 4vw, 80px); }
