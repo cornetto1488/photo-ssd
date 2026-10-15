@@ -18,7 +18,7 @@ class DreameMap3D {
   }
   setNames(n) { this.names = n || {}; this._dirty = true; }
   setData(m) {
-    this.map = m;
+    this.map = m; this._mapId = (this._mapId || 0) + 1; this._ck = null;
     const bin = atob(m.cells), n = bin.length, c = new Uint8Array(n);
     for (let i = 0; i < n; i++) c[i] = bin.charCodeAt(i);
     this.cells = c; this.w = m.w; this.h = m.h;
@@ -29,7 +29,7 @@ class DreameMap3D {
     this.totalPts = m.paths.reduce((a, p) => a + p.p.length / 2, 0);
     this.replay();
   }
-  replay() { this.progress = 0; this.anim = performance.now(); this._dirty = true; this.start(); }
+  replay() { this.progress = 0; this.anim = performance.now(); this._done = false; this._dirty = true; this.start(); }
   resize() {
     const r = this.cv.getBoundingClientRect(), dpr = Math.min(2, window.devicePixelRatio || 1);
     this.W = Math.max(50, r.width); this.H = Math.max(50, r.height); this.dpr = dpr;
@@ -84,7 +84,8 @@ class DreameMap3D {
       if (!this.vis || document.hidden) { this.running = false; return; }
       const idle = t - this.lastTouch > 3500;
       if (this.opts.autoRotate && idle && !this.dragging && !this.selected.size) { this.yaw += 0.0022; this._dirty = true; }
-      if (this.progress < 1) { this.progress = Math.min(1, (t - this.anim) / 5000); this._dirty = true; }
+      if (this.progress < 1) { this.progress = Math.min(1, (t - this.anim) / (this.opts.replayMs || 5000)); this._dirty = true; }
+      if (this.progress >= 1 && !this._done) { this._done = true; if (this.onReplayDone) this.onReplayDone(); }
       this._pulse = (t % 1600) / 1600;
       if ((this._dirty || this.opts.autoRotate || this.progress < 1) && t - (this._last || 0) > (document.documentElement.classList.contains("wp") ? 55 : 28)) { this._dirty = false; this._last = t; this.draw(t); }
       requestAnimationFrame(loop);
@@ -117,12 +118,15 @@ class DreameMap3D {
     this._proj = { OX, OY, s, sinT, cs, sn, cx, cy };
     const hasSel = this.selected.size > 0;
     const P = (x, y, z) => { const dx = x - cx, dy = y - cy; const rx = dx * cs - dy * sn, ry = dx * sn + dy * cs; return [OX + rx * s, OY + ry * s * sinT - z * s * cosT]; };
-    const poly = (pts, fill, stroke) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 0.7; ctx.stroke(); } };
+    let cc = ctx;
+    const poly = (pts, fill, stroke) => { cc.beginPath(); cc.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) cc.lineTo(pts[i][0], pts[i][1]); cc.closePath(); cc.fillStyle = fill; cc.fill(); if (stroke) { cc.strokeStyle = stroke; cc.lineWidth = 0.7; cc.stroke(); } };
 
+    const paintBase = (c) => {
+      cc = c;
     // мягкая тень под картой
-    const g = ctx.createRadialGradient(OX, OY + 8, 10, OX, OY + 8, R * s);
+    const g = c.createRadialGradient(OX, OY + 8, 10, OX, OY + 8, R * s);
     g.addColorStop(0, "rgba(0,0,0,.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    c.fillStyle = g; c.fillRect(0, 0, W, H);
 
     // пол: сначала плита (толщина), затем верх
     const slab = 5;
@@ -141,7 +145,22 @@ class DreameMap3D {
         }
       }
     }
+      cc = ctx;
+    };
     // «глянец»: лёгкая подсветка пола
+    // слои пола и стен кэшируются, пока ракурс не меняется (в обоях карта статична — кадр дешёвый)
+    let fl = null, wl = null;
+    if (this.opts.cache) {
+      const key = [W, H, dpr, this.yaw.toFixed(4), this.tilt.toFixed(3), this.zoom.toFixed(3), [...this.selected].join(","), this._mapId].join("|");
+      if (this._ck !== key) {
+        const mk = () => { const c = document.createElement("canvas"); c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [c, x]; };
+        const [fc, fx] = mk(), [wc, wx] = mk();
+        paintBase(fx); paintWalls.call(this, wx);
+        this._fc = fc; this._wc = wc; this._ck = key;
+      }
+      fl = this._fc; wl = this._wc;
+      ctx.drawImage(fl, 0, 0, W, H);
+    } else paintBase(ctx);
     // маршрут
     if (m.paths.length) {
       const total = this.totalPts, upTo = Math.floor(total * this.progress); let used = 0;
@@ -160,6 +179,8 @@ class DreameMap3D {
         }
       }
     }
+    function paintWalls(c) {
+      cc = c;
     // стены: далёкие первыми
     const WH = wallH, isW = (x, y) => x >= 0 && y >= 0 && x < w && y < h && cells[y * w + x] === 255;
     const items = [];
@@ -178,12 +199,14 @@ class DreameMap3D {
       }
       poly([P(x, y, WH), P(x + 1, y, WH), P(x + 1, y + 1, WH), P(x, y + 1, WH)], "#efe7dc", "#efe7dc");
     }
-    // зарядная станция
     if (m.charger) {
       const [x, y] = m.charger; const bw = 3.2;
       poly([P(x - bw, y - bw, 0), P(x + bw, y - bw, 0), P(x + bw, y + bw, 0), P(x - bw, y + bw, 0)], "rgba(59,224,140,.35)", "rgba(59,224,140,.9)");
-      const q = P(x, y, 7); ctx.fillStyle = "#3be08c"; ctx.font = `700 ${Math.max(11, s * 3)}px sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("⚡", q[0], q[1]);
+      const q = P(x, y, 7); c.fillStyle = "#3be08c"; c.font = `700 ${Math.max(11, s * 3)}px sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("⚡", q[0], q[1]);
     }
+      cc = ctx;
+    }
+    if (wl) ctx.drawImage(wl, 0, 0, W, H); else paintWalls.call(this, ctx);
     // пылесос в конце маршрута
     const last = m.paths.length ? m.paths[m.paths.length - 1] : null;
     let rb = m.robot;

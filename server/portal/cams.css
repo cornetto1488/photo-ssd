@@ -473,3 +473,67 @@ html.wp .wp-zone span { display: none; }
 .wp-brand { position: fixed; right: clamp(24px, 2vw, 44px); bottom: clamp(16px, 1.8vh, 30px); z-index: 2; pointer-events: none; font: 800 clamp(14px, 1.1vw, 20px)/1 var(--display); letter-spacing: .02em; color: #f2efe9; }
 .wp-brand b { background: linear-gradient(135deg, #ff8a4c, #ff5a1f); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 800; }
 .wp-brand small { font: 500 .62em var(--mono); letter-spacing: .18em; color: #6f6f7a; margin-left: 4px; }
+
+.k-cam canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #050506; }
+
+
+/* ===== обои: цельная зона под значки, карта поменьше, погода Омска и трек ===== */
+html.wp .wp-slots { display: none; }
+html.wp .kiosk { padding-bottom: calc(var(--wpsb, 0px) + clamp(8px, 1vh, 18px)); }
+.wp-brand { bottom: calc(var(--wpsb, 0px) + 4px); }
+.k-mid { display: contents; } .k-side { display: none; }
+html.wp .k-mid { display: grid; grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr); gap: clamp(12px, 1.4vw, 24px); min-height: 0; }
+html.wp .k-side { display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 24px); min-height: 0; min-width: 0; }
+html.wp .k-weather { display: none; }
+html.wp .k-wcard, html.wp .k-music { border-radius: 26px; border: 1px solid var(--wp-line); background: var(--wp-s1); min-width: 0; padding: clamp(14px, 1.5vw, 28px); box-sizing: border-box; }
+html.wp .k-wcard { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; min-height: 0; overflow: hidden; }
+.wc-top { display: flex; align-items: center; gap: 14px; }
+.wc-top b { font-family: var(--display); font-weight: 800; font-size: clamp(54px, min(6vw, 11vh), 130px); line-height: 1; color: #f6f3ee; letter-spacing: -.03em; }
+.wc-ico { font-style: normal; font-size: clamp(34px, min(3.6vw, 7vh), 80px); color: var(--wp-or); line-height: 1; }
+.wc-desc { font-size: clamp(16px, min(1.7vw, 3vh), 32px); font-weight: 700; color: #ece8e2; }
+.k-wcard small { font-size: clamp(11px, min(1vw, 1.9vh), 17px); color: #7f7f8a; }
+.wc-na { color: #7f7f8a; font-size: 18px; }
+.wc-days { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+.wc-days div { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; border-radius: 16px; background: var(--wp-s2); border: 1px solid var(--wp-line); }
+.wc-days span { font: 600 clamp(10px, .85vw, 14px) var(--mono); color: #7f7f8a; letter-spacing: .1em; }
+.wc-days i { font-style: normal; font-size: clamp(18px, 1.8vw, 32px); color: #cfcac2; }
+.wc-days b { font-size: clamp(14px, 1.3vw, 22px); color: #f6f3ee; }
+.wc-days em { font-style: normal; font-size: clamp(11px, 1vw, 16px); color: #6f6f7a; }
+html.wp .k-music { flex: 0 0 auto; display: flex; align-items: center; gap: 14px; }
+.mu-art { width: clamp(52px, 4.6vw, 92px); height: clamp(52px, 4.6vw, 92px); flex: none; border-radius: 16px; background: var(--wp-s2) center/cover no-repeat; display: grid; place-items: center; font-size: 28px; color: #6f6f7a; border: 1px solid var(--wp-line); }
+.mu-txt { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.mu-txt b { font-size: clamp(14px, min(1.4vw, 2.6vh), 24px); color: #f6f3ee; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mu-txt small { font-size: clamp(11px, 1vw, 16px); color: #7f7f8a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-music.idle b { color: #6f6f7a; }
+.mu-eq { display: flex; align-items: flex-end; gap: 3px; height: 24px; flex: none; opacity: .25; }
+.mu-eq i { width: 4px; height: 6px; border-radius: 2px; background: var(--wp-or); }
+.k-music.on .mu-eq { opacity: 1; }
+.k-music.on .mu-eq i { animation: mu-eq 1.1s ease-in-out infinite; }
+.k-music.on .mu-eq i:nth-child(2) { animation-delay: -.3s; } .k-music.on .mu-eq i:nth-child(3) { animation-delay: -.6s; } .k-music.on .mu-eq i:nth-child(4) { animation-delay: -.15s; }
+@keyframes mu-eq { 0%, 100% { height: 5px; } 50% { height: 22px; } }
+
+
+/* ===== v2rayA: карточка текущего узла и окно выбора ===== */
+.k-vpn { min-width: 0; }
+.k-vpnbtn { width: 100%; display: flex; align-items: center; gap: 12px; padding: clamp(9px, min(1vw, 1.6vh), 14px) 16px; border-radius: 16px; border: 1px solid var(--line-2); background: rgba(255,255,255,.04); color: var(--ink); cursor: pointer; text-align: left; transition: .15s; min-width: 0; }
+.k-vpnbtn b { flex: 1; min-width: 0; font-size: clamp(13px, min(1.3vw, 2.3vh), 20px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-vpnbtn em { font-style: normal; font-size: clamp(11px, 1vw, 15px); color: var(--muted); flex: none; }
+.k-vpnbtn .k-lab { flex: none; }
+.k-vdot { width: 9px; height: 9px; border-radius: 50%; background: #3be08c; box-shadow: 0 0 10px rgba(59,224,140,.6); flex: none; }
+.k-vpnbtn.off .k-vdot { background: #6f6f7a; box-shadow: none; }
+.k-vpnbtn:hover { border-color: rgba(255,90,31,.55); } .k-vpnbtn:active { transform: scale(.98); }
+html.wp .k-vpnbtn { background: var(--wp-s1); border-color: var(--wp-line); }
+.k-sheet { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(0,0,0,.74); padding: 24px; }
+.k-sheet-in { width: min(900px, 100%); max-height: 86vh; display: flex; flex-direction: column; gap: 14px; padding: clamp(16px, 1.8vw, 28px); border-radius: 26px; background: #0a0a0e; border: 1px solid rgba(255,255,255,.09); box-shadow: 0 30px 90px rgba(0,0,0,.7); }
+.k-sheet-h { display: flex; align-items: center; gap: 12px; }
+.k-sheet-h b { font-size: clamp(18px, 1.8vw, 28px); flex: 1; }
+.k-sheet-h em { font-style: normal; color: #ff9a66; font-size: 14px; }
+.k-sheet-x { border: 1px solid var(--line-2); background: transparent; color: var(--ink); width: 38px; height: 38px; border-radius: 12px; cursor: pointer; font-size: 16px; }
+.k-nodes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: auto; scrollbar-width: none; }
+.k-nodes::-webkit-scrollbar { display: none; }
+.k-node { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 12px 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,.075); background: #101015; color: #ebe7e1; cursor: pointer; text-align: left; min-width: 0; transition: .15s; }
+.k-node b { font-size: clamp(13px, 1.2vw, 18px); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-node small { color: #7f7f8a; font-size: 12px; }
+.k-node:hover { border-color: rgba(255,90,31,.55); } .k-node:disabled { opacity: .55; cursor: default; }
+.k-node.on { border-color: rgba(255,90,31,.75); background: #110c09; } .k-node.on small { color: #ff9a66; }
+.k-node.busy { border-color: #ff5a1f; opacity: 1 !important; }

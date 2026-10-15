@@ -20,9 +20,10 @@ function kioskBuild() {
           <div class="k-rooms" id="kRooms"></div>
         </div>
         <div class="k-quick hidden" id="kQuick"></div>
+        <div class="k-vpn hidden" id="kVpn"></div>
         <div class="k-tiles" id="kTiles"></div>
       </div>
-      <div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div>
+      <div class="k-mid"><div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div><div class="k-side"><div class="k-wcard" id="kWCard"></div><div class="k-music" id="kMusic"></div></div></div>
       <div class="k-cams" id="kCams"></div>
       <div class="k-ticker" id="kTicker"></div>
     </div>
@@ -56,6 +57,74 @@ function kioskWeather() {
   const c = weather.current, w = WEATHER[c.weather_code] || ["—", "cloud"];
   el.innerHTML = `<b>${c.temperature_2m > 0 ? "+" : ""}${Math.round(c.temperature_2m)}°</b><span>${kEsc(w[0])}<br><small>ощущается ${Math.round(c.apparent_temperature)}° · ветер ${Math.round(c.wind_speed_10m)} м/с</small></span>`;
 }
+function kioskWeatherCard() {
+  const el = $("#kWCard"); if (!el) return;
+  if (typeof weather === "undefined" || !weather?.current) { el.innerHTML = '<span class="k-lab">ПОГОДА · ОМСК</span><b class="wc-na">загружаю…</b>'; return; }
+  const c = weather.current, w = WEATHER[c.weather_code] || ["—", "cloud"], d = weather.daily, DN = ["ВС", "ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ"];
+  const sg = (n) => (n > 0 ? "+" : "") + Math.round(n) + "°";
+  const days = (d?.time || []).slice(1, 4).map((t, i) => { const ww = WEATHER[d.weather_code[i + 1]] || ["", "cloud"];
+    return '<div><span>' + DN[new Date(t).getDay()] + '</span><i>' + WICON[ww[1]] + '</i><b>' + sg(d.temperature_2m_max[i + 1]) + '</b><em>' + sg(d.temperature_2m_min[i + 1]) + '</em></div>'; }).join("");
+  el.innerHTML = '<span class="k-lab">ПОГОДА · ОМСК</span><div class="wc-top"><i class="wc-ico">' + WICON[w[1]] + '</i><b>' + sg(c.temperature_2m) + '</b></div>' +
+    '<div class="wc-desc">' + kEsc(w[0]) + '</div><small>ощущается ' + sg(c.apparent_temperature) + ' · ветер ' + Math.round(c.wind_speed_10m) + ' м/с' + (c.relative_humidity_2m != null ? ' · ' + c.relative_humidity_2m + '%' : '') + '</small>' +
+    '<div class="wc-days">' + days + '</div>';
+}
+async function kioskWeatherLoad() {
+  try { if (typeof loadWeather === "function" && (typeof weather === "undefined" || !weather?.current)) await loadWeather(); } catch (e) {}
+  kioskWeatherCard();
+}
+
+// --- что играет на компьютере: Wallpaper Engine сам отдаёт трек Windows (медиа-интеграция)
+function kioskMusic() {
+  const el = $("#kMusic"); if (!el) return;
+  const st = { title: "", artist: "", thumb: "", playing: false };
+  const render = () => {
+    const has = !!st.title;
+    el.classList.toggle("idle", !has);
+    el.classList.toggle("on", has && st.playing);
+    el.innerHTML = '<div class="mu-art"' + (st.thumb ? ' style="background-image:url(' + st.thumb + ')"' : "") + '>' + (st.thumb ? "" : "♪") + '</div>' +
+      '<div class="mu-txt"><span class="k-lab">' + (has ? (st.playing ? "СЕЙЧАС ИГРАЕТ" : "ПАУЗА") : "МУЗЫКА") + '</span><b>' + kEsc(has ? st.title : "Ничего не играет") + '</b><small>' + kEsc(has ? st.artist : "включи трек на компьютере") + '</small></div>' +
+      '<div class="mu-eq"><i></i><i></i><i></i><i></i></div>';
+  };
+  render();
+  try {
+    if (window.wallpaperRegisterMediaPropertiesListener) window.wallpaperRegisterMediaPropertiesListener((e) => { st.title = e.title || ""; st.artist = e.artist || ""; render(); });
+    if (window.wallpaperRegisterMediaThumbnailListener) window.wallpaperRegisterMediaThumbnailListener((e) => { st.thumb = e.thumbnail || ""; render(); });
+    if (window.wallpaperRegisterMediaPlaybackListener) window.wallpaperRegisterMediaPlaybackListener((e) => { st.playing = e.state === 1; render(); });
+  } catch (e) {}
+}
+
+// ---- v2rayA: смена узла прямо с рабочего стола ----
+async function kioskVpn() {
+  const el = $("#kVpn"); if (!el) return;
+  let j; try { j = await api("/api/home/v2raya"); } catch (e) { if (!kk.vpn) { el.classList.add("hidden"); } return; }
+  if (!kk.on) return;
+  kk.vpn = j; el.classList.remove("hidden");
+  el.innerHTML = '<button class="k-vpnbtn' + (j.running ? "" : " off") + '"><i class="k-vdot"></i><span class="k-lab">V2RAYA</span><b>' + kEsc(j.current || (j.running ? "узел не выбран" : "выключен")) + '</b><em>сменить ▾</em></button>';
+  $(".k-vpnbtn", el).onclick = kioskVpnSheet;
+}
+function kioskVpnSheet() {
+  const j = kk.vpn; if (!j) return;
+  let sh = $("#kVpnSheet"); if (sh) sh.remove();
+  sh = document.createElement("div"); sh.id = "kVpnSheet"; sh.className = "k-sheet";
+  sh.innerHTML = '<div class="k-sheet-in"><div class="k-sheet-h"><b>Узел v2rayA</b><em id="kVpnMsg"></em><button class="k-sheet-x" title="Закрыть">✕</button></div><div class="k-nodes">' +
+    j.servers.map((s, i) => '<button class="k-node' + (s.on ? " on" : "") + '" data-i="' + i + '"><b>' + kEsc(s.name) + '</b><small>' + kEsc(s.net || "") + (s.ping ? " · " + kEsc(s.ping) : "") + "</small></button>").join("") + "</div></div>";
+  $("#kiosk").appendChild(sh);
+  const close = () => sh.remove();
+  sh.onclick = (e) => { if (e.target === sh) close(); };
+  $(".k-sheet-x", sh).onclick = close;
+  $$(".k-node", sh).forEach((b) => b.onclick = async () => {
+    const s = j.servers[Number(b.dataset.i)]; if (!s || s.on || kk.vpnBusy) return;
+    kk.vpnBusy = true; $$(".k-node", sh).forEach((x) => x.disabled = true); b.classList.add("busy");
+    const msg = $("#kVpnMsg", sh); msg.textContent = "переключаю…";
+    try {
+      await post("/api/home/v2raya/connect", { id: s.id, type: s.type, sub: s.sub });
+      msg.textContent = "готово";
+      setTimeout(async () => { await kioskVpn(); close(); }, 2500);
+    } catch (e) { msg.textContent = e.message || "ошибка"; $$(".k-node", sh).forEach((x) => x.disabled = false); b.classList.remove("busy"); }
+    kk.vpnBusy = false;
+  });
+}
+
 async function kioskTiles() {
   const safe = (p) => p.catch(() => null);
   const [lights, vac, net] = await Promise.all([safe(api("/api/home/stats/lights?days=1")), safe(api("/api/home/dreame")), safe(api("/api/home/stats/net?hours=24"))]);
@@ -70,7 +139,34 @@ async function kioskTiles() {
   if (pc) t.push(`<div class="k-tile ${pc.online ? "lit" : ""}"><span>🖥 Компьютер</span><b>${pc.online ? "Включён" : "Выключен"}</b><small></small></div>`);
   $("#kTiles").innerHTML = t.join("");
 }
+async function kioskMapWp() {
+  const cv = $("#kMap"); if (!cv) return;
+  if (!kk.map || kk.map.cv !== cv) {
+    kk.map = new DreameMap3D(cv, { autoRotate: false, interactive: false, labels: true, cache: true, replayMs: 9000 });
+    kk.map.yaw = -0.6; kk.mapLoop = false;
+  }
+  try {
+    if (!kk.hist || Date.now() - kk.histAt > 30 * 60000) {
+      const names = await api("/api/home/dreame/rooms").catch(() => ({}));
+      const list = [];
+      for (let i = 0; i < 5; i++) { try { const m = await api("/api/home/dreame/map?i=" + i); if (!m || !m.paths) break; list.push(m); } catch (e) { break; } }
+      if (!kk.on) return;
+      if (list.length) { kk.hist = list; kk.histAt = Date.now(); kk.histNames = names; }
+    }
+  } catch (e) {}
+  if (!kk.hist || kk.mapLoop) return;
+  kk.mapLoop = true; kk.hi = 0;
+  const show = () => {
+    if (!kk.on) return;
+    const m = kk.hist[kk.hi % kk.hist.length], t = m.t ? new Date(m.t * 1000) : null;
+    kk.map.setNames(kk.histNames); kk.map.setData(m);
+    $("#kMapLabel").textContent = "уборка " + (kk.hi % kk.hist.length + 1) + " из " + kk.hist.length + (t ? " · " + t.toLocaleDateString("ru-RU", { day: "numeric", month: "long" }) + " " + t.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }) : "") + " · " + m.area + " м²";
+  };
+  kk.map.onReplayDone = () => { clearTimeout(kk.mapT); kk.mapT = setTimeout(() => { kk.hi++; show(); }, 7000); };
+  show();
+}
 async function kioskMap() {
+  if (document.documentElement.classList.contains("wp")) return kioskMapWp();
   try {
     const c = await dmLoad(true);
     if (!kk.on) return;
@@ -110,8 +206,10 @@ function kioskWpInit() {
   const W = window.ZH_WP; if (!W) return;
   const root = $("#kiosk");
   // ячейка значка Windows в CSS-пикселях (учитываем масштаб страницы), зона начинается в левом верхнем углу экрана
-  const dpr = window.devicePixelRatio || 1, cw = W.iw / dpr, ch = W.ih / dpr, pad = 8;
-  const zw = W.orange ? Math.round(W.cols * cw + pad) : 0, zh = Math.round(W.slots * ch + pad + 20);
+  const dpr = window.devicePixelRatio || 1, cw = W.iw / dpr, ch = W.ih / dpr, pad = 0;
+  const zw = W.orange ? Math.round(W.cols * cw + pad) : 0, zh = Math.round(W.slots * ch - ch * 0.07);
+  const sbPx = Math.max(screen.height - screen.availHeight, 48) / dpr + 6; // панель задач Windows не должна закрывать низ
+  document.documentElement.style.setProperty("--wpsb", Math.round(sbPx) + "px");
   document.documentElement.style.setProperty("--wpz", zw + "px");
   document.documentElement.style.setProperty("--wpzh", zh + "px");
   if (W.orange && !$("#wpZone")) {
@@ -229,35 +327,50 @@ function kioskLightBind() {
 // ---- камеры ----
 function kioskStopCams() {
   kk.gen++;
+  (kk.snaps || []).forEach((s) => { try { s.stop(); } catch (e) {} }); kk.snaps = [];
   const box = $("#kCams"); if (box) { box.querySelectorAll("video").forEach((v) => { v.removeAttribute("src"); v.load(); }); box.innerHTML = ""; }
 }
 async function kioskCams() {
   kioskStopCams();
   const box = $("#kCams"); if (!box) return;
-  const hevc = (() => { try { return !!document.createElement("video").canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'); } catch (e) { return false; } })();
-  if (kNight() || window.ZH_NOCAMS || !hevc) { box.classList.add("hidden"); return; } // у обоев (и части браузеров) нет декодера H.265
+  const hevc = (() => { try { return new URLSearchParams(location.search).get("snap") !== "1" && !!document.createElement("video").canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'); } catch (e) { return false; } })();
+  const snapMode = !hevc && typeof Worker !== "undefined" && !!window.HevcSnap; // у обоев Wallpaper Engine нет видеодекодеров: рисуем ключевые кадры
+  if (kNight() || window.ZH_NOCAMS || (!hevc && !snapMode)) { box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
   if (typeof cams === "undefined") return;
   if (!cams.loaded) await camsLoadConfig();
   if (!kk.on) return;
   const ids = homeCamsIds().slice(0, 3), gen = kk.gen;
   if (!ids.length) { box.classList.add("hidden"); return; }
-  box.innerHTML = ids.map((n) => { const c = cams.list.find((x) => x.n === n); return `<div class="k-cam" data-n="${n}"><video muted autoplay playsinline></video><span>${kEsc(c ? camName(c) : "Камера " + n)}</span><em>подключаюсь…</em></div>`; }).join("");
+  box.innerHTML = ids.map((n) => { const c = cams.list.find((x) => x.n === n); return `<div class="k-cam" data-n="${n}">${snapMode ? "<canvas></canvas>" : "<video muted autoplay playsinline></video>"}<span>${kEsc(c ? camName(c) : "Камера " + n)}</span><em>подключаюсь…</em></div>`; }).join("");
   $$(".k-cam", box).forEach((tile, i) => {
-    const n = Number(tile.dataset.n), v = $("video", tile), msg = $("em", tile);
+    const n = Number(tile.dataset.n), v = $("video", tile), cv = $("canvas", tile), msg = $("em", tile);
+    let snap = null;
     const start = async () => {
       if (gen !== kk.gen || !kk.on) return;
       msg.classList.remove("hidden"); msg.textContent = "подключаюсь…";
       try {
-        const d = await post("/api/cameras/archive-url", { camera: n, slot: "h", live: true });
-        if (gen !== kk.gen || !d.stream) return;
-        v.src = camVideoSrc(d.stream);
+        if (snapMode) {
+          if (snap) snap.stop();
+          snap = HevcSnap.start(null, cv, { intervalMs: 5000, maxW: 960,
+            getUrl: async () => { const d = await post("/api/cameras/archive-url", { camera: n, slot: "h", live: true }); if (!d.stream) throw new Error("нет потока"); return camVideoSrc(d.stream); },
+            onWarn: () => { if (!cv.width || cv.width === 300) msg.textContent = "нет сигнала"; },
+            onFrame: () => msg.classList.add("hidden"),
+            onError: () => { if (snap) snap.stop(); if (gen === kk.gen && kk.on) setTimeout(start, 6000); } });
+          kk.snaps.push(snap);
+        } else {
+          const d = await post("/api/cameras/archive-url", { camera: n, slot: "h", live: true });
+          if (gen !== kk.gen || !d.stream) return;
+          v.src = camVideoSrc(d.stream);
+        }
       } catch (e) { msg.textContent = "нет сигнала"; setTimeout(start, 15000); }
     };
-    v.addEventListener("playing", () => msg.classList.add("hidden"));
-    const retry = () => { if (gen === kk.gen && kk.on) setTimeout(start, 6000); };
-    v.addEventListener("error", retry); v.addEventListener("ended", retry);
-    setTimeout(start, i * 700);
+    if (v) {
+      v.addEventListener("playing", () => msg.classList.add("hidden"));
+      const retry = () => { if (gen === kk.gen && kk.on) setTimeout(start, 6000); };
+      v.addEventListener("error", retry); v.addEventListener("ended", retry);
+    }
+    setTimeout(start, i * 900);
   });
 }
 
@@ -265,12 +378,14 @@ function kioskStart() {
   kioskBuild();
   kk.on = true; kk.gen++;
   document.body.classList.add("kiosk-mode");
-  kioskClock(); kioskWeather(); kioskPoke();
+  kioskClock(); kioskWeather(); kioskPoke(); kioskWeatherLoad(); if (!kk.musicOn && $("#kMusic")) { kk.musicOn = true; kioskMusic(); }
   [2500, 8000, 20000].forEach((ms) => setTimeout(() => { if (kk.on) kioskWeather(); }, ms)); // погода подгружается чуть позже
   kk.timers.push(setInterval(kioskClock, 1000));
   kioskTiles(); kk.timers.push(setInterval(kioskTiles, 30000));
+  kioskVpn(); kk.timers.push(setInterval(() => { if (!kk.vpnBusy && !$("#kVpnSheet")) kioskVpn(); }, 60000));
   kioskLightBind(); kioskDevices(false); kk.timers.push(setInterval(() => { if (!kk.busy) kioskDevices(false); }, 45000));
   kk.timers.push(setInterval(kioskWeather, 60000));
+  kk.timers.push(setInterval(kioskWeatherLoad, 15 * 60000));
   kioskMap(); kk.timers.push(setInterval(kioskMap, 10 * 60000));
   kioskTicker(); kk.timers.push(setInterval(kioskTicker, 90000));
   kioskCams(); kk.timers.push(setInterval(kioskCams, 8 * 60000));
@@ -284,7 +399,7 @@ function kioskStart() {
 }
 function kioskKey(e) { if (e.key === "Escape" && kk.on) kioskExit(); }
 function kioskStop() {
-  kk.on = false; kk.timers.forEach((t) => clearInterval(t)); kk.timers = [];
+  kk.on = false; kk.timers.forEach((t) => clearInterval(t)); kk.timers = []; clearTimeout(kk.mapT); kk.mapLoop = false;
   kioskStopCams();
   if (kk.map) { kk.map.stop(); }
   document.body.classList.remove("kiosk-mode", "k-night");

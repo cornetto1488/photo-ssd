@@ -18,7 +18,7 @@
   // Настройки (адрес, ключ, зона под значки, быстрые папки) приходят из свойств обоев и передаются панели в адресе.
   var q = new URLSearchParams(location.search);
   var DEF_FOLDERS = "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos;Проекты|C:\\Users\\muall\\Documents\\Проекты;Загрузки|C:\\Users\\muall\\Downloads";
-  var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.has("nocams") ? q.get("nocams") === "1" : true,
+  var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.has("nocams") ? q.get("nocams") === "1" : false,
               iconcols: 1, iconslots: 5, iconw: 75, iconh: 113, zonemode: "orange", quick: true, folders: DEF_FOLDERS };
   var go = null, got = false;
   function b64(s) { return btoa(unescape(encodeURIComponent(s))); }
