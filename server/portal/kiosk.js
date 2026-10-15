@@ -19,11 +19,12 @@ function kioskBuild() {
           <div class="k-light-all"><button class="k-btn on" data-kl="on">${K_ICON.sun}<span>Включить всё</span></button><button class="k-btn off" data-kl="off">${K_ICON.moon}<span>Выключить всё</span></button></div>
           <div class="k-rooms" id="kRooms"></div>
         </div>
+        <div class="k-ac" id="kAc"></div>
         <div class="k-quick hidden" id="kQuick"></div>
         <div class="k-vpn hidden" id="kVpn"></div>
         <div class="k-tiles" id="kTiles"></div>
       </div>
-      <div class="k-mid"><div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div><div class="k-side"><div class="k-wcard" id="kWCard"></div><div class="k-ac" id="kAc"></div><div class="k-music" id="kMusic"></div></div></div>
+      <div class="k-mid"><div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div><div class="k-side"><div class="k-wcard" id="kWCard"></div><div class="k-music" id="kMusic"></div></div></div>
       <div class="k-cams" id="kCams"></div>
       <div class="k-ticker" id="kTicker"></div>
     </div>

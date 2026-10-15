@@ -1,0 +1,114 @@
+/* ZALET HOME — плоская чёрная тема (как на рабочем столе): без градиентов и оранжевого свечения. Сгенерировано genflat.js */
+:root { --bg: #040406; --bg-2: #07070a; --panel: #0a0a0e; --panel-2: #101015; --line: rgba(255,255,255,.075); --line-2: rgba(255,255,255,.14); }
+html, body { background: #040406 !important; }
+body::before, body::after, .bg-glow { display: none !important; }
+
+.bg-glow{background:none!important;filter:none!important}
+.grad{background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;-webkit-text-fill-color:currentColor!important;color:var(--acc)!important}
+.wordmark .za{background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;-webkit-text-fill-color:currentColor!important;color:var(--acc)!important}
+.top{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.logo{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+#nav a.active{background:var(--acc)!important;color:#160802!important}
+.btn-acc{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.tile.accent::after{background:none!important}
+.bar > i{background:var(--acc)!important;color:#160802!important}
+.dev.on{background:#110c09!important}
+.switch input:checked + i{background:var(--acc)!important;color:#160802!important}
+.chip.active{background:var(--acc)!important;color:#160802!important}
+.pin-logo{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.pin-dots i.on{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.pin-pad button{background:var(--panel)!important}
+.pin-len button.active{background:var(--acc)!important;color:#160802!important}
+.modal{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.skeleton{background:rgba(255,255,255,.035)!important}
+.boot-logo{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.boot-line i{background:var(--acc)!important;color:#160802!important}
+.sky{background:rgba(255,255,255,.035)!important;box-shadow:none!important}
+.sky.night{background:rgba(255,255,255,.035)!important}
+.sky.morning{background:rgba(255,255,255,.035)!important}
+.sky.day{background:rgba(255,255,255,.035)!important}
+.orb{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.sky.night .orb{background:var(--acc)!important;color:#160802!important}
+.lt .ico{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.netviz{background:rgba(255,255,255,.03)!important;background:rgba(255,255,255,.035)!important}
+.netviz::before{background:none!important}
+.proj-vpn{background:#0b0b0e!important}
+.proj-glow{background:none!important}
+.proj-logo img{box-shadow:none!important}
+.lb-nav{backdrop-filter:none!important}
+.confirm-ico{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.confirm-card.danger .confirm-ico{background:var(--acc)!important;color:#160802!important}
+.confirm-card.danger #cfYes{background:var(--acc)!important;color:#160802!important}
+body{background:var(--bg)!important}
+.fire-card, .window-card{box-shadow:none!important}
+.fire-title{background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;-webkit-text-fill-color:currentColor!important;color:var(--acc)!important}
+.fire-btns .btn{backdrop-filter:none!important}
+.win-days div{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.scene{background:var(--panel)!important}
+.gate-ico{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.grp.active{background:#110c09!important;box-shadow:none!important}
+.av{background:rgba(255,255,255,.035)!important}
+#trafficCanvas{background:rgba(255,255,255,.035)!important}
+.note.done .chk{background:var(--acc)!important;color:#160802!important}
+.days button.active{background:var(--acc)!important;color:#160802!important}
+.usb-ico{background:var(--acc)!important;color:#160802!important}
+.nv-legend button{backdrop-filter:none!important}
+.nv-legend .lg-pc{box-shadow:none!important}
+.nv-legend .lg-dev{box-shadow:none!important}
+.nv-pop{box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.door-ok{background:rgba(255,255,255,.035)!important}
+.cam-chip.on{background:var(--acc)!important;color:#160802!important}
+.cam-card{background:var(--panel)!important}
+.cam-card.is-open{box-shadow:none!important}
+.cam-live{background:var(--acc)!important;color:#160802!important}
+.st-meter i{background:var(--acc)!important;color:#160802!important}
+.cam-slider::-webkit-slider-thumb{box-shadow:none!important}
+.dr-hero{background:var(--panel)!important}
+.home-vac{background:var(--panel)!important}
+.dr-map canvas{background:rgba(255,255,255,.035)!important}
+.map-card{background:#0a0a0d!important}
+.ht{background:rgba(255,255,255,.035)!important}
+.ht.lit{background:#110c09!important}
+.dr-pick{backdrop-filter:none!important}
+.sheet{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#page-kiosk.active{background:#060608!important}
+.k-time{background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;-webkit-text-fill-color:currentColor!important;color:var(--acc)!important}
+.k-tile{backdrop-filter:none!important}
+.k-tile.lit{background:rgba(255,255,255,.04)!important}
+.k-btn.on{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.k-room.on{background:rgba(255,138,76,.10)!important;box-shadow:none!important;background:#110c09!important}
+.k-room{background:rgba(255,255,255,.035)!important}
+.k-room.on .k-ri{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+.wp-zone{background:rgba(255,255,255,.03)!important;box-shadow:none!important}
+.wp-slots i{background:rgba(255,255,255,.035)!important}
+.k-q{background:rgba(255,255,255,.03)!important}
+.k-q.main{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+html.wp .k-map{background:rgba(255,255,255,.035)!important}
+html.wp .k-btn.on{box-shadow:none!important}
+html.wp .k-room.on{box-shadow:none!important}
+html.wp .k-room.on .k-ri{box-shadow:none!important}
+html.wp .k-q.main{box-shadow:none!important}
+html.wp .k-tile{backdrop-filter:none!important}
+html.wp .k-ticker .k-dot{box-shadow:none!important}
+html.wp .wp-zone{background:rgba(255,255,255,.035)!important;box-shadow:none!important}
+html.wp .wp-zone::after{box-shadow:none!important}
+html.wp .wp-slots i{background:rgba(255,255,255,.035)!important}
+.wp-brand b{background:none!important;-webkit-background-clip:border-box!important;background-clip:border-box!important;-webkit-text-fill-color:currentColor!important;color:var(--acc)!important}
+.ac.on .ac-pwr{box-shadow:none!important}
+.ac-chip.on{box-shadow:none!important}
+
+@media (max-width: 860px){
+.bottom-nav{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+.bottom-nav a.active{background:var(--acc)!important;color:#160802!important}
+}
+@media (min-width: 861px){
+#nav a.active{background:var(--acc)!important;color:#160802!important;box-shadow:none!important}
+}
+
+#windowCanvas { display: none !important; }
+.window-card { background: var(--panel) !important; border: 1px solid var(--line) !important; }
+.window-card .win-temp, .window-card .win-desc { color: var(--ink) !important; text-shadow: none !important; }
+.win-days div { background: var(--panel-2) !important; border: 1px solid var(--line) !important; }
+.fire-card, .map-card, .netviz, .card { box-shadow: none !important; }
+.k-time { color: #f6f3ee !important; }
+html.wp .k-time i { color: var(--wp-or, #ff5a1f) !important; }

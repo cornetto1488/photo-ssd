@@ -577,11 +577,6 @@ html.wp .k-vpnbtn { background: var(--wp-s1); border-color: var(--wp-line); }
 .k-side { display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 24px); min-height: 0; min-width: 0; justify-content: center; }
 html:not(.wp) .k-wcard, html:not(.wp) .k-music { display: none; }
 .k-ac.hidden { display: none; }
-html.wp .k-wcard { flex: 0 0 auto; }
-html.wp .k-wcard .wc-top b { font-size: clamp(44px, min(4.6vw, 8vh), 100px); }
-html.wp .k-wcard .wc-desc { font-size: clamp(14px, min(1.4vw, 2.4vh), 24px); }
-html.wp .k-ac { flex: 1 1 auto; min-height: 0; display: flex; }
-html.wp .k-ac .ac { flex: 1; justify-content: space-between; }
 
 /* подключения */
 .acc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-bottom: 10px; }
@@ -590,17 +585,46 @@ html.wp .k-ac .ac { flex: 1; justify-content: space-between; }
 .acc-ok { color: var(--live, #3be08c); font-size: 13px; } .acc-no { color: var(--muted, #8c8c96); font-size: 13px; }
 .acc-act { display: flex; align-items: center; gap: 12px; }
 
-/* боковая колонка обоев: компактнее, чтобы кондиционер влезал целиком */
-html.wp .k-wcard { padding: clamp(12px, 1.1vw, 20px); gap: 4px; }
-html.wp .k-wcard .wc-top b { font-size: clamp(40px, min(3.4vw, 6vh), 64px); }
-html.wp .k-wcard .wc-ico { font-size: clamp(28px, min(2.6vw, 5vh), 46px); }
-html.wp .k-wcard .wc-desc { font-size: clamp(14px, min(1.3vw, 2.2vh), 20px); }
-html.wp .k-wcard .wc-days { margin-top: 2px; gap: 6px; }
-html.wp .k-wcard .wc-days div { padding: 4px 2px; flex-direction: row; justify-content: center; gap: 8px; }
-html.wp .k-wcard .wc-days i { font-size: 16px; }
-html.wp .k-ac .ac { gap: 8px; padding: clamp(10px, 1vw, 18px); }
-html.wp .k-ac .ac-set b { font-size: clamp(34px, min(3vw, 5.4vh), 60px); }
-html.wp .k-ac .ac-pwr { width: 42px; height: 42px; }
-html.wp .k-ac .ac-step { width: 40px; height: 40px; }
-html.wp .k-music { padding: clamp(10px, 1vw, 16px); }
-html.wp .k-music .mu-art { width: clamp(44px, 3.6vw, 64px); height: clamp(44px, 3.6vw, 64px); }
+
+/* кондиционер: компактная строка под кнопками света */
+html:not(.wp) .k-side { display: none; } html:not(.wp) .k-mid { display: contents; }
+.k-left .ac-c , #homeAc .ac-c  { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 14px; padding: 10px 16px; border-radius: 20px; }
+.k-left .ac-c .ac-top , #homeAc .ac-c .ac-top  { display: contents; }
+.k-left .ac-c .ac-pwr , #homeAc .ac-c .ac-pwr  { order: 0; width: 46px; height: 46px; }
+.k-left .ac-c .ac-ttl , #homeAc .ac-c .ac-ttl  { order: 1; flex: 1 1 80px; min-width: 0; }
+.k-left .ac-c .ac-ttl .k-lab , #homeAc .ac-c .ac-ttl .k-lab  { display: none; }
+.k-left .ac-c .ac-ttl b , #homeAc .ac-c .ac-ttl b  { font-size: clamp(14px, 1.2vw, 20px); }
+.k-left .ac-c .ac-ttl small , #homeAc .ac-c .ac-ttl small  { display: block; }
+.k-left .ac-c .ac-temp , #homeAc .ac-c .ac-temp  { order: 2; gap: 10px; }
+.k-left .ac-c .ac-set b , #homeAc .ac-c .ac-set b  { font-size: clamp(30px, 2.6vw, 46px); }
+.k-left .ac-c .ac-set small , #homeAc .ac-c .ac-set small  { font-size: 11px; white-space: nowrap; }
+.k-left .ac-c .ac-step , #homeAc .ac-c .ac-step  { width: 36px; height: 36px; font-size: 22px; }
+.k-left .ac-c .ac-row , #homeAc .ac-c .ac-row  { order: 3; flex-direction: row; align-items: center; gap: 6px; }
+.k-left .ac-c .ac-row .k-lab , #homeAc .ac-c .ac-row .k-lab  { display: none; }
+.k-left .ac-c .ac-chips , #homeAc .ac-c .ac-chips  { flex-wrap: nowrap; gap: 5px; }
+.k-left .ac-c .ac-chip , #homeAc .ac-c .ac-chip  { padding: 6px 10px; }
+.k-left .ac-c .ac-chip.sm , #homeAc .ac-c .ac-chip.sm  { padding: 6px 11px; font-size: 13px; }
+.k-left .k-ac.hidden { display: none; }
+
+/* блок света — по размеру содержимого, чтобы кондиционер шёл ровно под кнопками */
+.k-light, .k-rooms { flex: 0 0 auto; }
+.k-left .k-ac { margin: 0; }
+
+#homeAc { margin: 16px 0 6px; }
+#homeAc .ac-c { padding: 12px 18px; }
+#homeAc.hidden { display: none; }
+@media (max-width: 760px) { #homeAc .ac-c, .k-left .ac-c { flex-wrap: wrap; } }
+
+/* часы в киоске: белые, как на рабочем столе (плоская тема не должна красить их в оранжевый) */
+.k-time { color: #f6f3ee !important; }
+html.wp .k-time i { color: var(--wp-or, #ff5a1f) !important; }
+
+/* компактная карточка: вторая строка с подписанными кнопками (Турбо, Эко, Сон, Шторки, Тихо) */
+.k-left .ac-c, #homeAc .ac-c { flex-wrap: wrap; row-gap: 10px; }
+.k-left .ac-c .ac-row.ac-togs, #homeAc .ac-c .ac-row.ac-togs { order: 4; flex-basis: 100%; }
+.k-left .ac-c .ac-togs .ac-chips, #homeAc .ac-c .ac-togs .ac-chips { flex-wrap: wrap; }
+.k-left .ac-c .ac-togs .ac-chip, #homeAc .ac-c .ac-togs .ac-chip { padding: 5px 12px; font-size: 13px; }
+.k-left .ac-c .ac-togs .ac-chip span { display: inline; }
+/* страница «Устройства»: климат и пылесос над комнатами */
+.dev-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin: 6px 0 22px; align-items: start; }
+.dev-extra .hidden { display: none; }
