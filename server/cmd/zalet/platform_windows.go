@@ -329,7 +329,7 @@ func runAction(id string, c Config) error {
 // моды Windhawk и темы ZALET для них: id мода, тема, название в каталоге
 var whMods = [][3]string{
 	{"windows-11-start-menu-styler", "FrostyGlass", "Windows 11 Start Menu Styler"},
-	{"windows-11-taskbar-styler", "CleanSlate", "Windows 11 Taskbar Styler"},
+	{"windows-11-taskbar-styler", "SimplyTransparent", "Windows 11 Taskbar Styler"},
 	{"windows-11-notification-center-styler", "Unified", "Windows 11 Notification Center Styler"},
 }
 
