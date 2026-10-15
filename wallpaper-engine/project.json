@@ -1,12 +1,12 @@
 {
   "title": "ZALET HOME — киоск",
-  "description": "Панель дома на рабочем столе: часы, погода, 3D-карта, кнопки света, оранжевая зона под значки и быстрые папки. Нужен ключ доступа (в панели: Роутер → Токен).",
+  "description": "Панель дома на рабочем столе: часы, погода, 3D-карта, кнопки света, красивая зона под значки и быстрые папки. Нужен ключ доступа (в панели: Роутер → Токен).",
   "type": "web",
   "file": "index.html",
   "preview": "preview.jpg",
   "contentrating": "Everyone",
   "tags": ["Utility"],
-  "version": 2,
+  "version": 3,
   "general": {
     "properties": {
       "homeurl": {
@@ -23,7 +23,7 @@
       },
       "zonemode": {
         "order": 2,
-        "text": "Оранжевая зона под значки рабочего стола",
+        "text": "Зона под значки рабочего стола",
         "type": "combo",
         "options": [
           { "label": "Показывать", "value": "orange" },
@@ -31,32 +31,59 @@
         ],
         "value": "orange"
       },
-      "zonewidth": {
+      "iconslots": {
         "order": 3,
-        "text": "Ширина зоны под значки, px",
+        "text": "Сколько значков в зоне (ячеек сверху вниз)",
         "type": "slider",
-        "min": 90,
-        "max": 420,
-        "step": 5,
-        "value": 190
+        "min": 1,
+        "max": 12,
+        "step": 1,
+        "value": 5
+      },
+      "iconcols": {
+        "order": 4,
+        "text": "Колонок значков в зоне",
+        "type": "slider",
+        "min": 1,
+        "max": 4,
+        "step": 1,
+        "value": 1
+      },
+      "iconw": {
+        "order": 5,
+        "text": "Ширина ячейки значка Windows, px (подгонка)",
+        "type": "slider",
+        "min": 50,
+        "max": 160,
+        "step": 1,
+        "value": 75
+      },
+      "iconh": {
+        "order": 6,
+        "text": "Высота ячейки значка Windows, px (подгонка)",
+        "type": "slider",
+        "min": 60,
+        "max": 200,
+        "step": 1,
+        "value": 113
       },
       "quick": {
-        "order": 4,
+        "order": 7,
         "text": "Кнопки быстрых папок (хранилище и др.)",
         "type": "bool",
         "value": true
       },
       "folders": {
-        "order": 5,
+        "order": 8,
         "text": "Папки: Название|путь;Название|путь (первая — главная кнопка)",
         "type": "textinput",
         "value": "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos;Проекты|C:\\Users\\muall\\Documents\\Проекты;Загрузки|C:\\Users\\muall\\Downloads"
       },
       "nocams": {
-        "order": 6,
-        "text": "Без камер (камеры нужен кодек H.265)",
+        "order": 9,
+        "text": "Без камер (в обоях нет декодера H.265)",
         "type": "bool",
-        "value": false
+        "value": true
       }
     }
   }

@@ -15,17 +15,18 @@
 <div id="msg"><div><b>ZALET HOME</b><span id="t">Подключаюсь к панели…</span></div></div>
 <script>
   // Wallpaper Engine не показывает вложенные страницы (iframe), поэтому обои сами переходят на панель дома.
-  // Настройки (адрес, ключ, зона для значков, быстрые папки) приходят из свойств обоев и передаются панели в адресе.
+  // Настройки (адрес, ключ, зона под значки, быстрые папки) приходят из свойств обоев и передаются панели в адресе.
   var q = new URLSearchParams(location.search);
   var DEF_FOLDERS = "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos;Проекты|C:\\Users\\muall\\Documents\\Проекты;Загрузки|C:\\Users\\muall\\Downloads";
-  var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.get("nocams") === "1",
-              zonewidth: 190, zonemode: "orange", quick: true, folders: DEF_FOLDERS };
+  var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.has("nocams") ? q.get("nocams") === "1" : true,
+              iconcols: 1, iconslots: 5, iconw: 75, iconh: 113, zonemode: "orange", quick: true, folders: DEF_FOLDERS };
   var go = null, got = false;
   function b64(s) { return btoa(unescape(encodeURIComponent(s))); }
   function launch() {
     if (!cfg.token) { document.getElementById("t").innerHTML = "Открой свойства обоев и вставь «Ключ доступа».<br>Он есть в панели: Роутер → Токен."; return; }
     var u = cfg.home.replace(/\/+$/, "") + "/?wp=1&token=" + encodeURIComponent(cfg.token) +
-      "&nocams=" + (cfg.nocams ? "1" : "0") + "&zone=" + Math.round(cfg.zonewidth) + "&zmode=" + cfg.zonemode +
+      "&nocams=" + (cfg.nocams ? "1" : "0") + "&ic=" + Math.round(cfg.iconcols) + "&is=" + Math.round(cfg.iconslots) +
+      "&iw=" + Math.round(cfg.iconw) + "&ih=" + Math.round(cfg.iconh) + "&zmode=" + cfg.zonemode +
       "&quick=" + (cfg.quick ? "1" : "0") + "&folders=" + encodeURIComponent(b64(cfg.folders)) + "#kiosk";
     if (u !== go) { go = u; location.replace(u); }
   }
@@ -35,7 +36,10 @@
       if (p.homeurl) cfg.home = String(p.homeurl.value || cfg.home).trim();
       if (p.token) cfg.token = String(p.token.value || "").trim();
       if (p.nocams) cfg.nocams = !!p.nocams.value;
-      if (p.zonewidth) cfg.zonewidth = Number(p.zonewidth.value) || 190;
+      if (p.iconcols) cfg.iconcols = Number(p.iconcols.value) || 1;
+      if (p.iconslots) cfg.iconslots = Number(p.iconslots.value) || 5;
+      if (p.iconw) cfg.iconw = Number(p.iconw.value) || 75;
+      if (p.iconh) cfg.iconh = Number(p.iconh.value) || 113;
       if (p.zonemode) cfg.zonemode = String(p.zonemode.value);
       if (p.quick) cfg.quick = !!p.quick.value;
       if (p.folders) cfg.folders = String(p.folders.value || "");

@@ -9,8 +9,9 @@
     document.documentElement.classList.add("wp");
     const b64d = (s) => { try { return decodeURIComponent(escape(atob(s))); } catch (e) { return ""; } };
     const folders = b64d(q.get("folders") || "").split(";").map((x) => x.split("|")).filter((x) => x.length >= 2 && x[0].trim() && x[1].trim()).map((x) => ({ n: x[0].trim(), p: x.slice(1).join("|").trim() })).slice(0, 8);
-    const z = Number(q.get("zone"));
-    window.ZH_WP = { zone: Number.isFinite(z) && q.get("zone") !== null ? Math.max(0, Math.min(500, z)) : 190, orange: q.get("zmode") !== "off", folders, quick: q.get("quick") !== "0" };
+    const num = (k, d, lo, hi) => { const v = Number(q.get(k)); return q.get(k) !== null && Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d; };
+    // зона под значки рабочего стола: ic колонок × is ячеек, размер ячейки Windows iw × ih (в пикселях экрана)
+    window.ZH_WP = { cols: Math.round(num("ic", 1, 1, 4)), slots: Math.round(num("is", 5, 1, 12)), iw: num("iw", 75, 50, 160), ih: num("ih", 113, 60, 200), orange: q.get("zmode") !== "off", folders, quick: q.get("quick") !== "0" };
     // обои присылают изменения свойств (ключ, зона, папки) — пересобираем адрес и перезагружаемся, защита от зацикливания
     window.wallpaperPropertyListener = {
       applyUserProperties(p) {
@@ -19,7 +20,10 @@
         const b64e = (s) => btoa(unescape(encodeURIComponent(s)));
         if (p.token && String(p.token.value || "").trim()) set("token", String(p.token.value).trim());
         if (p.nocams) set("nocams", p.nocams.value ? "1" : "0");
-        if (p.zonewidth) set("zone", Math.round(p.zonewidth.value));
+        if (p.iconcols) set("ic", Math.round(p.iconcols.value));
+        if (p.iconslots) set("is", Math.round(p.iconslots.value));
+        if (p.iconw) set("iw", Math.round(p.iconw.value));
+        if (p.iconh) set("ih", Math.round(p.iconh.value));
         if (p.zonemode) set("zmode", p.zonemode.value);
         if (p.quick) set("quick", p.quick.value ? "1" : "0");
         if (p.folders) set("folders", b64e(String(p.folders.value || "")));

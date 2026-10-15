@@ -404,12 +404,14 @@ html.wp body.k-night #page-kiosk .k-drift { filter: none; } /* на обоях �
 
 /* ===== обои Wallpaper Engine: оранжевая зона под значки и быстрые папки ===== */
 html.wp .kiosk { padding-left: calc(var(--wpz, 0px) + clamp(14px, 2vw, 34px)); }
-.wp-zone { position: fixed; left: 0; top: 0; bottom: 0; width: var(--wpz, 190px); z-index: 1; pointer-events: none; border-radius: 0 30px 30px 0;
-  background: linear-gradient(180deg, rgba(255,138,76,.30), rgba(255,90,31,.12) 55%, rgba(255,90,31,.24));
-  border-right: 1px solid rgba(255,160,90,.55);
-  box-shadow: 18px 0 70px rgba(255,90,31,.22), inset -1px 0 0 rgba(255,255,255,.08); }
-.wp-zone::before { content: ""; position: absolute; inset: 14px 14px 14px 10px; border: 1.5px dashed rgba(255,190,130,.28); border-radius: 22px; }
-.wp-zone span { position: absolute; left: 0; right: 0; bottom: 20px; text-align: center; font-family: var(--mono); font-size: 11px; letter-spacing: .22em; color: rgba(255,200,150,.65); }
+.wp-zone { position: fixed; left: 0; top: 0; z-index: 1; pointer-events: none; box-sizing: border-box; padding: 0;
+  border-radius: 0 0 30px 0; overflow: hidden;
+  background: radial-gradient(130% 70% at 0% 0%, rgba(255,170,90,.34), transparent 62%), linear-gradient(180deg, rgba(255,138,76,.22), rgba(255,90,31,.12));
+  border: 1px solid rgba(255,160,90,.55); border-left: 0; border-top: 0;
+  box-shadow: 0 18px 60px rgba(255,90,31,.28), 0 0 0 1px rgba(255,255,255,.03) inset, inset -1px -1px 0 rgba(255,255,255,.08); }
+.wp-slots { display: grid; }
+.wp-slots i { display: block; margin: 5px; box-sizing: border-box; border-radius: 18px; border: 1px solid rgba(255,205,150,.20); background: linear-gradient(160deg, rgba(255,255,255,.07), rgba(255,255,255,.015)); box-shadow: inset 0 1px 0 rgba(255,255,255,.07); }
+.wp-zone span { position: absolute; left: 0; right: 0; bottom: 9px; text-align: center; font-family: var(--mono); font-size: 10px; letter-spacing: .3em; color: rgba(255,205,160,.7); text-indent: .3em; }
 .k-quick { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .k-quick-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(clamp(120px, 11vw, 190px), 1fr)); gap: 8px; }
 .k-q { display: flex; align-items: center; gap: 10px; height: clamp(42px, min(5vw, 7vh), 62px); padding: 0 14px; border-radius: 16px; border: 1px solid rgba(255,160,90,.35); background: linear-gradient(160deg, rgba(255,138,76,.14), rgba(255,138,76,.04)); color: var(--ink); font-size: clamp(13px, min(1.3vw, 2.3vh), 20px); font-weight: 600; cursor: pointer; text-align: left; min-width: 0; transition: .15s; }
@@ -418,3 +420,56 @@ html.wp .kiosk { padding-left: calc(var(--wpz, 0px) + clamp(14px, 2vw, 34px)); }
 .k-q i { display: grid; place-items: center; width: 1.5em; height: 1.5em; flex: none; }
 .k-q i svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .k-q span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* зона под значки: контент сдвинут вправо ровно на ширину зоны */
+html.wp .kiosk { padding-left: calc(var(--wpz, 0px) + clamp(18px, 2vw, 40px)); }
+
+/* ===================== ОБОИ: чёрная тема, оранжевый — только акцент ===================== */
+html.wp { --wp-black: #040406; --wp-s1: #0a0a0e; --wp-s2: #101015; --wp-line: rgba(255,255,255,.075); --wp-or: #ff5a1f; }
+html.wp #page-kiosk.active { background: radial-gradient(55% 45% at 8% 0%, rgba(255,90,31,.055), transparent 70%), var(--wp-black); }
+html.wp .kiosk { padding-top: clamp(18px, 2.4vh, 36px); }
+/* часы: белые, оранжевый только двоеточие */
+html.wp .k-time { background: none; -webkit-background-clip: initial; background-clip: initial; color: #f6f3ee; letter-spacing: -.04em; }
+html.wp .k-time i { color: var(--wp-or); opacity: 1; }
+html.wp .k-time i.off { opacity: .18; }
+html.wp .k-date { color: #ece8e2; font-weight: 600; letter-spacing: .01em; }
+html.wp .k-weather b { color: #f6f3ee; }
+html.wp .k-weather { color: #7f7f8a; }
+/* карта */
+html.wp .k-map { background: radial-gradient(80% 70% at 50% 45%, #0b0b10, #050507); border: 1px solid var(--wp-line); box-shadow: none; }
+html.wp .k-maplabel { color: #6f6f7a; }
+/* кнопки света */
+html.wp .k-lab { color: #6f6f7a; } html.wp .k-lab b { color: #f1eee9; }
+html.wp .k-btn.on { background: var(--wp-or); color: #160802; border: 0; box-shadow: 0 6px 24px rgba(255,90,31,.22); }
+html.wp .k-btn.off { background: var(--wp-s1); border: 1px solid var(--wp-line); box-shadow: none; color: #e9e5df; }
+html.wp .k-btn.off:hover { border-color: rgba(255,90,31,.5); background: var(--wp-s2); }
+html.wp .k-room { background: var(--wp-s1); border: 1px solid var(--wp-line); box-shadow: none; }
+html.wp .k-room .k-ri { background: var(--wp-s2); color: #6f6f7a; }
+html.wp .k-room.on { background: #110c09; border-color: rgba(255,90,31,.7); box-shadow: 0 0 0 1px rgba(255,90,31,.12), 0 0 30px rgba(255,90,31,.10); }
+html.wp .k-room.on .k-ri { background: var(--wp-or); color: #160802; box-shadow: 0 0 18px rgba(255,90,31,.4); }
+html.wp .k-room.on .k-rs { color: #ff9a66; }
+/* быстрые папки */
+html.wp .k-q { background: var(--wp-s1); border: 1px solid var(--wp-line); color: #ebe7e1; }
+html.wp .k-q:hover { border-color: rgba(255,90,31,.55); background: var(--wp-s2); }
+html.wp .k-q.main { background: var(--wp-or); color: #160802; border-color: transparent; box-shadow: 0 6px 22px rgba(255,90,31,.22); }
+/* статусные пилюли и камеры */
+html.wp .k-tile { background: var(--wp-s1); border: 1px solid var(--wp-line); backdrop-filter: none; }
+html.wp .k-tile.lit { background: #0f0b09; border-color: rgba(255,90,31,.45); }
+html.wp .k-cam { background: #020203; border-color: var(--wp-line); }
+html.wp .k-ticker .k-dot { background: var(--wp-or); box-shadow: 0 0 10px rgba(255,90,31,.7); }
+html.wp .k-ticker small { color: #6f6f7a; }
+
+/* ----- зона под значки: чёрное стекло, тонкая оранжевая кромка, слоты по замеру сетки Windows ----- */
+html.wp .wp-zone { padding: 0; border-radius: 0 0 26px 0; border: 1px solid rgba(255,90,31,.42); border-left: 0; border-top: 0;
+  background: linear-gradient(180deg, #0d0d11, #08080b);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6), 14px 18px 60px rgba(0,0,0,.6), 0 0 34px rgba(255,90,31,.10), inset -1px -1px 0 rgba(255,255,255,.04); }
+html.wp .wp-zone::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--wp-or); opacity: .9; border-radius: 0 0 26px 0; box-shadow: 0 0 14px rgba(255,90,31,.55); }
+html.wp .wp-slots { align-content: start; }
+/* значок Windows: картинка 59 px у верха ячейки, подпись до ~96 px → слот 71×101, сверху отступ 1 px, по бокам по 2 px */
+html.wp .wp-slots i { margin: calc(var(--ch) * .009) 2px 0 2px; height: calc(var(--ch) * .89); align-self: start; border-radius: 15px;
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.012)); border: 1px solid rgba(255,255,255,.075); box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+html.wp .wp-zone span { display: none; }
+/* фирменная подпись */
+.wp-brand { position: fixed; right: clamp(24px, 2vw, 44px); bottom: clamp(16px, 1.8vh, 30px); z-index: 2; pointer-events: none; font: 800 clamp(14px, 1.1vw, 20px)/1 var(--display); letter-spacing: .02em; color: #f2efe9; }
+.wp-brand b { background: linear-gradient(135deg, #ff8a4c, #ff5a1f); -webkit-background-clip: text; background-clip: text; color: transparent; font-weight: 800; }
+.wp-brand small { font: 500 .62em var(--mono); letter-spacing: .18em; color: #6f6f7a; margin-left: 4px; }

@@ -109,12 +109,19 @@ function kioskOpenFolder(path) {
 function kioskWpInit() {
   const W = window.ZH_WP; if (!W) return;
   const root = $("#kiosk");
-  const z = W.orange ? W.zone : 0;
-  document.documentElement.style.setProperty("--wpz", z + "px");
-  if (W.orange && z > 0 && !$("#wpZone")) {
-    const el = document.createElement("div"); el.id = "wpZone"; el.className = "wp-zone"; el.innerHTML = "<span>РАБОЧИЕ ЗНАЧКИ</span>";
+  // ячейка значка Windows в CSS-пикселях (учитываем масштаб страницы), зона начинается в левом верхнем углу экрана
+  const dpr = window.devicePixelRatio || 1, cw = W.iw / dpr, ch = W.ih / dpr, pad = 8;
+  const zw = W.orange ? Math.round(W.cols * cw + pad) : 0, zh = Math.round(W.slots * ch + pad + 20);
+  document.documentElement.style.setProperty("--wpz", zw + "px");
+  document.documentElement.style.setProperty("--wpzh", zh + "px");
+  if (W.orange && !$("#wpZone")) {
+    const el = document.createElement("div"); el.id = "wpZone"; el.className = "wp-zone";
+    el.style.cssText = "width:" + zw + "px;height:" + zh + "px;--cw:" + cw + "px;--ch:" + ch + "px;--pad:" + pad + "px;";
+    let slots = ""; for (let i = 0; i < W.cols * W.slots; i++) slots += "<i></i>";
+    el.innerHTML = '<div class="wp-slots" style="grid-template-columns:repeat(' + W.cols + ',' + cw + 'px);grid-auto-rows:' + ch + 'px">' + slots + "</div>";
     root.appendChild(el);
   }
+  if (!$("#wpBrand")) { const b = document.createElement("div"); b.id = "wpBrand"; b.className = "wp-brand"; b.innerHTML = '<b>ZA</b>LET <small>HOME</small>'; root.appendChild(b); }
   const q = $("#kQuick");
   if (q && W.quick && W.folders.length) {
     q.classList.remove("hidden");
