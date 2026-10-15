@@ -3,6 +3,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf16"
 )
 
 const agentExe = `C:\ProgramData\ZALET\zalet-agent.exe`
@@ -310,16 +312,55 @@ func runAction(id string, c Config) error {
 			openBrowser("https://windhawk.net/")
 			return errors.New("winget не найден — открыл сайт Windhawk, установите вручную")
 		}
-		logf("  В Windhawk → «Найти моды» поставьте:")
-		logf("   • Windows 11 Start Menu Styler — чёрное меню «Пуск»")
-		logf("   • Windows 11 Taskbar Styler — стиль панели задач")
-		logf("   • Windows 11 Notification Center Styler — центр уведомлений")
-		logf("  У стайлеров в настройках есть готовые темы; цвет акцента берётся из темы ZALET (оранжевый)")
-		openBrowser("https://windhawk.net/mods")
+		if n := whApplyThemes(); n > 0 {
+			logf("  темы ZALET выставлены для %d мод(ов) — «Пуск», панель задач и центр уведомлений обновятся сами", n)
+			return nil
+		}
+		logf("  Осталось поставить моды (Windhawk → Explore → название → Install), затем нажать здесь «Повторить» — темы выставятся сами:")
+		for _, m := range whMods {
+			logf("   • %s → тема %s", m[2], m[1])
+		}
 	default:
 		return errors.New("неизвестное действие")
 	}
 	return nil
+}
+
+// моды Windhawk и темы ZALET для них: id мода, тема, название в каталоге
+var whMods = [][3]string{
+	{"windows-11-start-menu-styler", "FrostyGlass", "Windows 11 Start Menu Styler"},
+	{"windows-11-taskbar-styler", "CleanSlate", "Windows 11 Taskbar Styler"},
+	{"windows-11-notification-center-styler", "Unified", "Windows 11 Notification Center Styler"},
+}
+
+// whApplyThemes выставляет темы установленным модам (настройки Windhawk лежат в HKLM — Windows спросит права).
+func whApplyThemes() int {
+	var lines []string
+	n := 0
+	for _, m := range whMods {
+		if regExists(`HKLM\SOFTWARE\Windhawk\Engine\Mods\` + m[0] + `\Settings`) {
+			lines = append(lines, fmt.Sprintf(`Set-ItemProperty "$b\%s\Settings" -Name theme -Value '%s'; Set-ItemProperty "$b\%s" -Name SettingsChangeTime -Value $t -Type DWord`, m[0], m[1], m[0]))
+			n++
+		}
+	}
+	if n == 0 {
+		return 0
+	}
+	script := `$b='HKLM:\SOFTWARE\Windhawk\Engine\Mods'; $t=[int][DateTimeOffset]::UtcNow.ToUnixTimeSeconds(); ` + strings.Join(lines, "; ")
+	u := utf16.Encode([]rune(script))
+	raw := make([]byte, len(u)*2)
+	for i, v := range u {
+		raw[2*i], raw[2*i+1] = byte(v), byte(v>>8)
+	}
+	enc := base64.StdEncoding.EncodeToString(raw)
+	logf("  выставляю темы модам — подтвердите окно администратора")
+	err := command("powershell", "-NoProfile", "-Command",
+		"Start-Process powershell -Verb RunAs -Wait -WindowStyle Hidden -ArgumentList '-NoProfile','-EncodedCommand','"+enc+"'").Run()
+	if err != nil {
+		logf("  не вышло (окно администратора отменено?)")
+		return 0
+	}
+	return n
 }
 
 func undoAction(id string, c Config) error {
