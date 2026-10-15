@@ -589,3 +589,18 @@ html.wp .k-ac .ac { flex: 1; justify-content: space-between; }
 .acc-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .acc-ok { color: var(--live, #3be08c); font-size: 13px; } .acc-no { color: var(--muted, #8c8c96); font-size: 13px; }
 .acc-act { display: flex; align-items: center; gap: 12px; }
+
+/* боковая колонка обоев: компактнее, чтобы кондиционер влезал целиком */
+html.wp .k-wcard { padding: clamp(12px, 1.1vw, 20px); gap: 4px; }
+html.wp .k-wcard .wc-top b { font-size: clamp(40px, min(3.4vw, 6vh), 64px); }
+html.wp .k-wcard .wc-ico { font-size: clamp(28px, min(2.6vw, 5vh), 46px); }
+html.wp .k-wcard .wc-desc { font-size: clamp(14px, min(1.3vw, 2.2vh), 20px); }
+html.wp .k-wcard .wc-days { margin-top: 2px; gap: 6px; }
+html.wp .k-wcard .wc-days div { padding: 4px 2px; flex-direction: row; justify-content: center; gap: 8px; }
+html.wp .k-wcard .wc-days i { font-size: 16px; }
+html.wp .k-ac .ac { gap: 8px; padding: clamp(10px, 1vw, 18px); }
+html.wp .k-ac .ac-set b { font-size: clamp(34px, min(3vw, 5.4vh), 60px); }
+html.wp .k-ac .ac-pwr { width: 42px; height: 42px; }
+html.wp .k-ac .ac-step { width: 40px; height: 40px; }
+html.wp .k-music { padding: clamp(10px, 1vw, 16px); }
+html.wp .k-music .mu-art { width: clamp(44px, 3.6vw, 64px); height: clamp(44px, 3.6vw, 64px); }
