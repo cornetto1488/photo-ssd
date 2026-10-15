@@ -665,3 +665,25 @@ html.wp body.k-night .k-cams { display: grid; }
 
 /* надпись камеры внизу кадра видна целиком: кадр прижат к низу, обрезается только верх */
 .k-cam video, .k-cam canvas { object-position: 50% 100%; }
+
+/* кадр камеры в плитке: нижние ~10% кадра уходят за край, надпись камеры оказывается прямо у нижнего края */
+.k-cam video, .k-cam canvas { top: auto !important; bottom: -10% !important; height: 110% !important; object-position: 50% 100%; }
+.k-cam { cursor: pointer; transition: border-color .15s; }
+.k-cam:hover { border-color: rgba(255,90,31,.6); }
+/* камера на весь экран */
+.k-camfull { position: fixed; inset: 0; z-index: 80; background: #000; cursor: pointer; }
+.k-camfull canvas, .k-camfull video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.k-camfull-bar { position: absolute; left: calc(var(--wpz, 0px) + 28px); right: 28px; bottom: calc(var(--wpsb, 0px) + 22px); display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-radius: 18px; background: rgba(6,6,8,.78); border: 1px solid rgba(255,255,255,.08); }
+.k-camfull-bar b { font-size: clamp(16px, 1.4vw, 24px); color: #f6f3ee; }
+.k-camfull-bar em { font-style: normal; color: #85858f; font-size: 14px; flex: 1; }
+.k-camfull-x { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; border: 1px solid rgba(255,255,255,.14); color: #f6f3ee; font-size: 16px; }
+.k-camfull-bar .k-vdot { background: #ff4d4d; box-shadow: 0 0 10px rgba(255,77,77,.6); }
+
+/* обои: плитка камеры в пропорции кадра 16:9 — виден весь кадр (время сверху слева и надпись камеры снизу справа) */
+html.wp .k-cams { height: auto; }
+html.wp .k-cam { aspect-ratio: 16 / 9; }
+html.wp .k-cam video, html.wp .k-cam canvas { top: 0 !important; bottom: 0 !important; height: 100% !important; object-fit: cover; object-position: 50% 50%; }
+/* место под камеры: часы на обоях чуть компактнее */
+html.wp .k-time { font-size: clamp(56px, min(9vw, 12vh), 180px); }
+html.wp .k-quick > .k-lab { display: none; }
+html.wp .k-left { gap: clamp(6px, 1vh, 12px); }

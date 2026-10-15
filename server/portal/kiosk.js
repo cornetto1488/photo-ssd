@@ -340,6 +340,7 @@ function kioskLightBind() {
 
 // ---- камеры ----
 function kioskStopCams() {
+  kioskCamClose();
   kk.gen++;
   (kk.snaps || []).forEach((s) => { try { s.stop(); } catch (e) {} }); kk.snaps = [];
   const box = $("#kCams"); if (box) { box.querySelectorAll("video").forEach((v) => { v.removeAttribute("src"); v.load(); }); box.innerHTML = ""; }
@@ -386,7 +387,43 @@ async function kioskCams() {
       v.addEventListener("error", retry); v.addEventListener("ended", retry);
     }
     setTimeout(start, i * 900);
+    tile.addEventListener("click", () => kioskCamOpen(n, snapMode, $("span", tile).textContent));
   });
+}
+
+// ---- камера на весь экран по нажатию (закрывается нажатием, сама — через 5 минут) ----
+function kioskCamOpen(n, snapMode, title) {
+  kioskCamClose();
+  const ov = document.createElement("div"); ov.className = "k-camfull"; ov.id = "kCamFull";
+  ov.innerHTML = (snapMode ? "<canvas></canvas>" : "<video muted autoplay playsinline></video>") +
+    '<div class="k-camfull-bar"><i class="k-vdot"></i><b>' + kEsc(title) + '</b><em>подключаюсь…</em><span class="k-camfull-x">✕</span></div>';
+  $("#kiosk").appendChild(ov);
+  const msg = $("em", ov), gen = kk.gen;
+  ov.addEventListener("click", kioskCamClose);
+  const start = async () => {
+    if (!$("#kCamFull") || gen !== kk.gen) return;
+    try {
+      const d = await post("/api/cameras/archive-url", { camera: n, slot: "h", live: true });
+      if (!$("#kCamFull") || !d.stream) return;
+      if (snapMode) {
+        // постоянный поток: кадр раз в секунду в полном размере (пока окно открыто)
+        kk.camFull = HevcSnap.start(camVideoSrc(d.stream), $("canvas", ov), { intervalMs: 1000, maxW: 1920,
+          onFrame: () => { msg.textContent = "в эфире"; },
+          onError: () => { if (kk.camFull) kk.camFull.stop(); kk.camFull = null; msg.textContent = "переподключаюсь…"; setTimeout(start, 3000); } });
+      } else {
+        const v = $("video", ov); v.src = camVideoSrc(d.stream);
+        v.addEventListener("playing", () => { msg.textContent = "в эфире"; });
+      }
+    } catch (e) { msg.textContent = "нет сигнала"; }
+  };
+  start();
+  kk.camFullTimer = setTimeout(kioskCamClose, 5 * 60000);
+}
+function kioskCamClose() {
+  clearTimeout(kk.camFullTimer);
+  if (kk.camFull) { try { kk.camFull.stop(); } catch (e) {} kk.camFull = null; }
+  const ov = $("#kCamFull");
+  if (ov) { const v = $("video", ov); if (v) { v.removeAttribute("src"); v.load(); } ov.remove(); }
 }
 
 function kioskStart() {
