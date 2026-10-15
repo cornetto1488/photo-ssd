@@ -33,6 +33,7 @@ if (Test-Path $bakFile) {
   foreach ($p in $j.files.PSObject.Properties) { $bak.files[$p.Name] = $p.Value }
   $bak.readonlyDirs = @($j.readonlyDirs)
   if ($j.legacyMerged) { $bak['legacyMerged'] = $true }
+  if ($j.ssdNav) { $bak['ssdNav'] = $j.ssdNav }
 }
 function Save-Bak { $bak | ConvertTo-Json -Depth 6 | Set-Content -Path $bakFile -Encoding UTF8 }
 
@@ -240,6 +241,29 @@ if ($Mode -eq 'apply') {
     $mpKey.Close()
   }
 
+  # «SSD» в панели навигации Проводника — свой пункт со своим значком (у закреплённой сетевой папки значок не меняется)
+  $ssd = $null
+  try { $ssd = ((New-Object -ComObject Shell.Application).Namespace('shell:::{679f85cb-0220-4080-b29b-5540cc05aab6}').Items() | Where-Object { $_.Path -match '^\\\\[^\\]+\\ssd$' } | Select-Object -First 1).Path } catch { }
+  if (-not $ssd) { $md0 = @(Get-CimInstance Win32_MappedLogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match '\\SSD$' }) | Select-Object -First 1; if ($md0) { $ssd = $md0.ProviderName } }
+  if ($ssd) {
+    Write-Host "• SSD в панели навигации ($ssd)"
+    $g = '{5A1E7A11-55D0-4A1E-9D7E-2A5D5D0E5A55}'
+    $ck = "Software\Classes\CLSID\$g"
+    Set-V $ck '' 'SSD' String
+    Set-V $ck 'System.IsPinnedToNameSpaceTree' 1 DWord
+    Set-V $ck 'SortOrderIndex' 0x42 DWord
+    Set-V "$ck\DefaultIcon" '' "$ico\drive-net.ico,0" ExpandString
+    Set-V "$ck\InProcServer32" '' '%SystemRoot%\system32\shell32.dll' ExpandString
+    Set-V "$ck\Instance" 'CLSID' '{0E5AAE11-A475-4c5b-AB00-C66DE400274E}' String
+    Set-V "$ck\Instance\InitPropertyBag" 'Attributes' 0x11 DWord
+    Set-V "$ck\Instance\InitPropertyBag" 'TargetFolderPath' $ssd ExpandString
+    Set-V "$ck\ShellFolder" 'FolderValueFlags' 0x28 DWord
+    Set-V "$ck\ShellFolder" 'Attributes' (Dw 0x4D 0x00 0x80 0xF0) DWord
+    Set-V "Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\$g" '' 'SSD' String
+    Set-V 'Software\Microsoft\Windows\CurrentVersion\Explorer\HideDesktopIcons\NewStartPanel' $g 1 DWord
+    $bak['ssdNav'] = $g; Save-Bak
+  }
+
   if (-not $NoCursors -and (Test-Path "$cur\arrow.cur")) {
     Write-Host '• Курсоры ZALET'
     $map = [ordered]@{ Arrow = 'arrow'; Hand = 'link'; IBeam = 'ibeam'; Crosshair = 'cross'; Wait = 'wait'; AppStarting = 'busy'; No = 'no'; SizeNS = 'size-ns'; SizeWE = 'size-we'; SizeNWSE = 'size-nwse'; SizeNESW = 'size-nesw'; SizeAll = 'size-all' }
@@ -270,6 +294,9 @@ else {
       $k.SetValue($e.name, $v, $kind)
     } elseif ($k) { $k.DeleteValue($e.name, $false) }
     if ($k) { $k.Close() }
+  }
+  if ($bak.Contains('ssdNav') -and $bak.ssdNav) {
+    foreach ($sk in "Software\Classes\CLSID\$($bak.ssdNav)", "Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\$($bak.ssdNav)") { try { $HK.DeleteSubKeyTree($sk, $false) } catch { } }
   }
   foreach ($ini in $bak.files.Keys) {
     $f = $bak.files[$ini]
