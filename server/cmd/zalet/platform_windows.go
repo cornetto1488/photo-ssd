@@ -299,6 +299,8 @@ func runAction(id string, c Config) error {
 	case "windhawk":
 		if fileExists(`C:\Program Files\Windhawk\windhawk.exe`) {
 			exec.Command(`C:\Program Files\Windhawk\windhawk.exe`).Start()
+		} else if processRunning("windhawk_setup.exe") {
+			return errors.New("установщик Windhawk уже открыт — завершите его (окно может быть за другими окнами), потом нажмите ещё раз")
 		} else if _, err := exec.LookPath("winget"); err == nil {
 			logf("  ставлю Windhawk через winget (официальный пакет RamenSoftware.Windhawk)…")
 			if err := streamCmd(command("winget", "install", "-e", "--id", "RamenSoftware.Windhawk", "--accept-source-agreements", "--accept-package-agreements")); err != nil {
