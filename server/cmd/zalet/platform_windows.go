@@ -226,6 +226,10 @@ func runAction(id string, c Config) error {
 				return e
 			}
 		}
+		// второй путь автозапуска — ярлык в «Автозагрузке» (на случай, если запись Run не сработает)
+		lnk := `$s=(New-Object -ComObject WScript.Shell).CreateShortcut((Join-Path ([Environment]::GetFolderPath('Startup')) 'ZALET Opener.lnk'));` +
+			`$s.TargetPath=Join-Path $env:WINDIR 'System32\wscript.exe';$s.Arguments='"` + filepath.Join(dir, "listener.vbs") + `"';$s.WindowStyle=7;$s.Save()`
+		command("powershell", "-NoProfile", "-Command", lnk).Run()
 		if !portOpen(18765) {
 			exec.Command("wscript.exe", filepath.Join(dir, "listener.vbs")).Start()
 			time.Sleep(2 * time.Second)
@@ -335,6 +339,7 @@ func undoAction(id string, c Config) error {
 			`Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" | Where-Object { $_.CommandLine -like '*listener.ps1*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }`).Run()
 		command("reg", "delete", `HKCU\Software\Classes\zaletopen`, "/f").Run()
 		command("reg", "delete", `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, "/v", "ZaletOpener", "/f").Run()
+		command("powershell", "-NoProfile", "-Command", `$p=Join-Path ([Environment]::GetFolderPath('Startup')) 'ZALET Opener.lnk'; if (Test-Path $p) { [IO.File]::Delete($p) }`).Run()
 	case "agent":
 		if !fileExists(agentExe) {
 			return nil
