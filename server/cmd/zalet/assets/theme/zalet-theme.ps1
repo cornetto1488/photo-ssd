@@ -195,6 +195,12 @@ if ($Mode -eq 'apply') {
     try { Set-FolderIcon $dir.FullName "$ico\folder.ico" } catch { Write-Host "  пропуск: $($dir.FullName)" }
   }
 
+  Write-Host '• Иконка сетевого диска «Хранилище»'
+  foreach ($md in @(Get-CimInstance Win32_MappedLogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match '\\SSD$' })) {
+    $letter = $md.DeviceID.TrimEnd(':')
+    Set-V "Software\Classes\Applications\Explorer.exe\Drives\$letter\DefaultIcon" '' "$ico\drive-net.ico,0" ExpandString
+  }
+
   if (-not $NoCursors -and (Test-Path "$cur\arrow.cur")) {
     Write-Host '• Курсоры ZALET'
     $map = [ordered]@{ Arrow = 'arrow'; Hand = 'link'; IBeam = 'ibeam'; Crosshair = 'cross'; Wait = 'wait'; AppStarting = 'busy'; No = 'no'; SizeNS = 'size-ns'; SizeWE = 'size-we'; SizeNWSE = 'size-nwse'; SizeNESW = 'size-nesw'; SizeAll = 'size-all' }

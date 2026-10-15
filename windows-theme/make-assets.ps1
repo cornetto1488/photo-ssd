@@ -96,6 +96,9 @@ Icon 'network' { param($g) $p = Ln $g; $g.DrawEllipse($p, 210, 210, 604, 604); $
 Icon 'user' { param($g) $p = Ln $g; $g.DrawEllipse($p, 377, 190, 270, 270); $g.DrawArc($p, 230, 530, 564, 520, 200, 140) }
 Icon 'zalet' { param($g) $p = Ln $g; $g.DrawLines($p, (Pts @(170, 500, 512, 200, 854, 500))); $g.DrawLines($p, (Pts @(260, 420, 260, 840, 764, 840, 764, 420))); $g.DrawLines($p, (Pts @(440, 840, 440, 640, 584, 640, 584, 840))) }
 
+Icon 'usb' { param($g) $p = Ln $g; $c = RR 412 150 200 200 26; $g.DrawPath($p, $c); $g.DrawLine($p, 470, 230, 470, 270); $g.DrawLine($p, 554, 230, 554, 270); $b = RR 340 350 344 520 70; $g.DrawPath($p, $b); $g.FillEllipse((Brush $OR), 477, 720, 70, 70) }
+Icon 'drive-net' { param($g) $p = Ln $g; $d = RR 150 200 724 290 70; $g.DrawPath($p, $d); $g.DrawLine($p, 260, 345, 520, 345); $g.FillEllipse((Brush $OR), 690, 310, 70, 70); $g.DrawLine($p, 512, 490, 512, 720); $g.DrawLine($p, 230, 790, 794, 790); $g.FillEllipse((Brush $OR), 462, 740, 100, 100) }
+
 foreach ($n in $icons.Keys) { WriteIcoCur (Join-Path $icoDir "$n.ico") $icons[$n] @(256, 64, 48, 32, 24, 16) 1 0 0 }
 
 # ---------- курсоры: рисуем на 256 (= 32 px * 8), сохраняем 32/48/64/96/128 ----------
