@@ -55,6 +55,43 @@ function Set-V([string]$sub, [string]$name, $value, [Microsoft.Win32.RegistryVal
   Save-Orig $sub $name; Save-Bak
   $k = $HK.CreateSubKey($sub); $k.SetValue($name, $value, $kind); $k.Close()
 }
+# Если раньше применялись старые скрипты темы, настоящие исходные значения лежат в их копиях (backup*.json) —
+# берём их, чтобы откат вернул систему к состоянию ДО любых тем ZALET.
+function Seed([string]$sub, [string]$name, $exists, $kind, $value) {
+  $key = "$sub|$name"
+  if ($bak.values.Contains($key)) { return }
+  $bak.values[$key] = [ordered]@{ sub = $sub; name = $name; exists = [bool]$exists; kind = $kind; value = $value }
+}
+function SeedDw([string]$sub, [string]$name, $v) { if ($null -eq $v) { Seed $sub $name $false $null $null } else { Seed $sub $name $true 'DWord' $v } }
+function SeedStr([string]$sub, [string]$name, $v, [string]$kind = 'String') { if ($null -eq $v) { Seed $sub $name $false $null $null } else { Seed $sub $name $true $kind ([string]$v) } }
+function Seed-Legacy {
+  $pers = 'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'; $acc = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Accent'; $dwm = 'Software\Microsoft\Windows\DWM'
+  $b1 = Join-Path $dst 'backup.json'; $b2 = Join-Path $dst 'backup2.json'; $b3 = Join-Path $dst 'backup3.json'
+  if (Test-Path $b1) {
+    $o = Get-Content $b1 -Raw | ConvertFrom-Json
+    SeedDw $pers 'AppsUseLightTheme' $o.AppsUseLightTheme; SeedDw $pers 'SystemUsesLightTheme' $o.SystemUsesLightTheme; SeedDw $pers 'ColorPrevalence' $o.ColorPrevalence
+    SeedDw $dwm 'AccentColor' $o.DwmAccentColor; SeedDw $dwm 'ColorizationColor' $o.DwmColorizationColor; SeedDw $dwm 'ColorizationAfterglow' $o.DwmAfterglow
+    SeedDw $acc 'AccentColorMenu' $o.AccentColorMenu
+    $cls = 'Software\Classes\CLSID'
+    if (-not $o.BinHadIcon) { foreach ($n in '', 'full', 'empty') { Seed "$cls\{645FF040-5081-101B-9F08-00AA002F954E}\DefaultIcon" $n $false $null $null } }
+    if (-not $o.PcHadIcon) { Seed "$cls\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\DefaultIcon" '' $false $null $null }
+  }
+  if (Test-Path $b2) {
+    $o = Get-Content $b2 -Raw | ConvertFrom-Json
+    SeedDw 'Control Panel\Desktop' 'AutoColorization' $o.AutoColorization; SeedDw $acc 'StartColorMenu' $o.StartColorMenu; SeedDw $acc 'AccentColorMenu' $o.AccentColorMenu
+    if ($o.AccentPalette) { Seed $acc 'AccentPalette' $true 'Binary' $o.AccentPalette } else { Seed $acc 'AccentPalette' $false $null $null }
+  }
+  if (Test-Path $b3) {
+    $o = Get-Content $b3 -Raw | ConvertFrom-Json
+    $ex = 'Software\Microsoft\Windows\CurrentVersion\Explorer\CLSID'
+    foreach ($pair in @(@("$ex\{645FF040-5081-101B-9F08-00AA002F954E}\DefaultIcon", $o.Bin, @('', 'full', 'empty')), @("$ex\{20D04FE0-3AEA-1069-A2D8-08002B30309D}\DefaultIcon", $o.Pc, @('')))) {
+      if ($null -eq $pair[1]) { foreach ($n in $pair[2]) { Seed $pair[0] $n $false $null $null } }
+      else { foreach ($p in $pair[1].PSObject.Properties) { SeedStr $pair[0] $(if ($p.Name -eq '(default)') { '' } else { $p.Name }) $p.Value 'ExpandString' } }
+    }
+    foreach ($n in 'Hilight', 'HilightText', 'HotTrackingColor', 'MenuHilight') { SeedStr 'Control Panel\Colors' $n $o.$n }
+  }
+}
+
 function Dw([byte]$r, [byte]$g, [byte]$b, [byte]$a) { [BitConverter]::ToInt32([byte[]]($r, $g, $b, $a), 0) }
 function RgbInt([int]$r, [int]$g, [int]$b) { $r + ($g -shl 8) + ($b -shl 16) }
 
@@ -63,7 +100,11 @@ function Set-FolderIcon([string]$dir, [string]$ico) {
   if (-not (Test-Path -LiteralPath $dir -PathType Container)) { return }
   $ini = Join-Path $dir 'desktop.ini'
   if (-not $bak.files.Contains($ini)) {
-    if (Test-Path -LiteralPath $ini) {
+    if (Test-Path -LiteralPath "$ini.zalet-bak") {          # копия от старого скрипта темы — это и есть оригинал
+      $bak.files[$ini] = [ordered]@{ existed = $true; copy = "$ini.zalet-bak" }
+    } elseif (Test-Path -LiteralPath "$ini.zalet-new") {    # старый скрипт создавал desktop.ini с нуля
+      $bak.files[$ini] = [ordered]@{ existed = $false; copy = $null }; $bak.readonlyDirs += $dir
+    } elseif (Test-Path -LiteralPath $ini) {
       $copy = Join-Path $iniBak ([guid]::NewGuid().ToString() + '.ini')
       attrib -h -s "$ini"; Copy-Item -LiteralPath $ini -Destination $copy -Force
       $bak.files[$ini] = [ordered]@{ existed = $true; copy = $copy }
@@ -105,6 +146,7 @@ $kClsid = 'Software\Microsoft\Windows\CurrentVersion\Explorer\CLSID'
 $shellIcons = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons'
 
 if ($Mode -eq 'apply') {
+  if (-not (Test-Path $bakFile)) { Seed-Legacy; Save-Bak }
   # файлы иконок и курсоров — в постоянную папку профиля
   $ico = Join-Path $dst 'icons'; $cur = Join-Path $dst 'cursors'
   New-Item -ItemType Directory -Force -Path $ico, $cur | Out-Null
@@ -179,7 +221,7 @@ else {
     if ($e.exists) {
       if (-not $k) { $k = $HK.CreateSubKey($e.sub) }
       $kind = [Microsoft.Win32.RegistryValueKind]$e.kind
-      $v = switch ($e.kind) { 'Binary' { [Convert]::FromBase64String($e.value) } 'DWord' { [int]$e.value } 'QWord' { [long]$e.value } 'MultiString' { [string[]]$e.value } default { [string]$e.value } }
+      $v = switch ($e.kind) { 'Binary' { [Convert]::FromBase64String($e.value) } 'DWord' { [BitConverter]::ToInt32([BitConverter]::GetBytes([int64]$e.value), 0) } 'QWord' { [long]$e.value } 'MultiString' { [string[]]$e.value } default { [string]$e.value } }
       $k.SetValue($e.name, $v, $kind)
     } elseif ($k) { $k.DeleteValue($e.name, $false) }
     if ($k) { $k.Close() }
@@ -202,7 +244,10 @@ else {
     $cmd = "Remove-ItemProperty -Path '$shellIcons' -Name '3','4' -ErrorAction SilentlyContinue"
     try { Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', $cmd } catch { }
   }
-  Move-Item -LiteralPath $bakFile -Destination ($bakFile + '.restored-' + (Get-Date -Format 'yyyyMMdd-HHmmss')) -Force
+  foreach ($ini in $bak.files.Keys) { foreach ($m in "$ini.zalet-bak", "$ini.zalet-new") { if (Test-Path -LiteralPath $m) { attrib -h -s "$m"; [IO.File]::Delete($m) } } }
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  foreach ($old in 'backup.json', 'backup2.json', 'backup3.json') { $p = Join-Path $dst $old; if (Test-Path $p) { Move-Item -LiteralPath $p -Destination "$p.restored-$stamp" -Force } }
+  Move-Item -LiteralPath $bakFile -Destination ($bakFile + '.restored-' + $stamp) -Force
   Refresh-Shell -Restart
   Write-Host 'Готово: прежняя тема, иконки и курсоры возвращены.' -ForegroundColor Green
 }
