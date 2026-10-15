@@ -13,6 +13,7 @@
 </head>
 <body>
 <div id="msg"><div><b>ZALET HOME</b><span id="t">Подключаюсь к панели…</span></div></div>
+<script src="token.js"></script>
 <script>
   // Wallpaper Engine не показывает вложенные страницы (iframe), поэтому обои сами переходят на панель дома.
   // Настройки (адрес, ключ, зона под значки, быстрые папки) приходят из свойств обоев и передаются панели в адресе.
@@ -20,6 +21,7 @@
   var DEF_FOLDERS = "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos;Проекты|C:\\Users\\muall\\Documents\\Проекты;Загрузки|C:\\Users\\muall\\Downloads";
   var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.has("nocams") ? q.get("nocams") === "1" : false,
               iconcols: 1, iconslots: 5, iconw: 75, iconh: 113, zonemode: "orange", quick: true, folders: DEF_FOLDERS };
+  if (window.ZH_LOCAL_TOKEN && !cfg.token) cfg.token = window.ZH_LOCAL_TOKEN;
   var go = null, got = false;
   function b64(s) { return btoa(unescape(encodeURIComponent(s))); }
   function launch() {
