@@ -340,6 +340,9 @@ func whApplyThemes() int {
 	for _, m := range whMods {
 		if regExists(`HKLM\SOFTWARE\Windhawk\Engine\Mods\` + m[0] + `\Settings`) {
 			lines = append(lines, fmt.Sprintf(`Set-ItemProperty "$b\%s\Settings" -Name theme -Value '%s'; Set-ItemProperty "$b\%s" -Name SettingsChangeTime -Value $t -Type DWord`, m[0], m[1], m[0]))
+			if m[0] == "windows-11-start-menu-styler" { // сплошной чёрный фон «Пуска» поверх темы
+				lines = append(lines, `$s="$b\windows-11-start-menu-styler\Settings"; Set-ItemProperty $s -Name 'controlStyles[0].target' -Value 'Border#AcrylicBorder'; Set-ItemProperty $s -Name 'controlStyles[0].styles[0]' -Value 'Background=#FF070709'; Set-ItemProperty $s -Name 'controlStyles[1].target' -Value 'Border#AcrylicOverlay'; Set-ItemProperty $s -Name 'controlStyles[1].styles[0]' -Value 'Opacity=0'`)
+			}
 			n++
 		}
 	}
