@@ -687,3 +687,6 @@ html.wp .k-cam video, html.wp .k-cam canvas { top: 0 !important; bottom: 0 !impo
 html.wp .k-time { font-size: clamp(56px, min(9vw, 12vh), 180px); }
 html.wp .k-quick > .k-lab { display: none; }
 html.wp .k-left { gap: clamp(6px, 1vh, 12px); }
+
+/* углы плиток камер скруглены слабее — дата в левом верхнем углу кадра не срезается */
+html.wp .k-cam { border-radius: 10px; }
