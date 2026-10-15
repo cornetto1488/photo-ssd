@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ZALET HOME — киоск</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #060608; font-family: "Segoe UI", sans-serif; }
+  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #060608; }
+  #msg { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; color: #f2f0ed; padding: 40px; }
+  #msg div { max-width: 640px; line-height: 1.5; }
+  #msg b { display: block; font-size: 34px; margin-bottom: 14px; background: linear-gradient(135deg, #ff8a4c, #ff5a1f); -webkit-background-clip: text; color: transparent; }
+  #msg span { color: #8c8c96; font-size: 18px; }
+</style>
+</head>
+<body>
+<iframe id="f" allow="autoplay; fullscreen"></iframe>
+<div id="msg"><div><b>ZALET HOME</b><span>Открой свойства обоев и вставь «Ключ доступа».<br>Он есть в панели: Роутер → Токен.</span></div></div>
+<script>
+  // Настройки приходят из свойств обоев Wallpaper Engine. Для проверки в обычном браузере можно открыть:
+  // index.html?home=http://192.168.1.1&token=КЛЮЧ
+  var q = new URLSearchParams(location.search);
+  var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.get("nocams") === "1" };
+  var f = document.getElementById("f"), msg = document.getElementById("msg");
+  function apply() {
+    if (!cfg.token) { msg.style.display = "flex"; f.removeAttribute("src"); f.dataset.u = ""; return; }
+    msg.style.display = "none";
+    var u = cfg.home.replace(/\/+$/, "") + "/?wp=1&token=" + encodeURIComponent(cfg.token) + (cfg.nocams ? "&nocams=1" : "") + "#kiosk";
+    if (f.dataset.u !== u) { f.dataset.u = u; f.src = u; }
+  }
+  window.wallpaperPropertyListener = {
+    applyUserProperties: function (p) {
+      if (p.homeurl) cfg.home = String(p.homeurl.value || cfg.home).trim();
+      if (p.token) cfg.token = String(p.token.value || "").trim();
+      if (p.nocams) cfg.nocams = !!p.nocams.value;
+      apply();
+    }
+  };
+  apply();
+  // если панель недоступна (роутер перезагружается) — тихо пробуем снова
+  f.addEventListener("error", function () { setTimeout(function () { f.dataset.u = ""; apply(); }, 15000); });
+</script>
+</body>
+</html>

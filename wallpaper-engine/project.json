@@ -1,0 +1,32 @@
+{
+  "title": "ZALET HOME — киоск",
+  "description": "Панель дома на рабочем столе: часы, погода, 3D-карта, камеры и кнопки света. Нужен адрес панели и ключ доступа (в панели: Роутер → Токен).",
+  "type": "web",
+  "file": "index.html",
+  "preview": "preview.jpg",
+  "contentrating": "Everyone",
+  "tags": ["Utility"],
+  "version": 1,
+  "general": {
+    "properties": {
+      "homeurl": {
+        "order": 0,
+        "text": "Адрес панели ZALET HOME",
+        "type": "textinput",
+        "value": "http://192.168.1.1"
+      },
+      "token": {
+        "order": 1,
+        "text": "Ключ доступа (Роутер → Токен)",
+        "type": "textinput",
+        "value": ""
+      },
+      "nocams": {
+        "order": 2,
+        "text": "Без камер (легче для видеокарты)",
+        "type": "bool",
+        "value": false
+      }
+    }
+  }
+}

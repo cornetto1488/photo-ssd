@@ -1,4 +1,20 @@
 "use strict";
+// Режим обоев (Wallpaper Engine) и киоска без PIN: адрес вида /?wp=1&token=КЛЮЧ#kiosk
+(() => {
+  const q = new URLSearchParams(location.search);
+  let t = q.get("token") || "";
+  try { if (t) sessionStorage.setItem("zh-token", t); else t = sessionStorage.getItem("zh-token") || ""; } catch (e) {}
+  window.ZH_TOKEN = t;
+  if (q.get("wp") === "1") document.documentElement.classList.add("wp");
+  if (q.get("nocams") === "1") window.ZH_NOCAMS = true;
+  if (t) {
+    const rf = window.fetch.bind(window);
+    window.fetch = (u, o = {}) => {
+      if (typeof u === "string" && u.startsWith("/")) { const h = new Headers(o.headers || {}); if (!h.has("Authorization")) h.set("Authorization", "Bearer " + t); o = { ...o, headers: h }; }
+      return rf(u, o);
+    };
+  }
+})();
 // ZALET HOME — панель дома.
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -1057,7 +1073,8 @@ function camVideoSrc(stream) {
   const ua = navigator.userAgent;
   const apple = /iPhone|iPad|iPod/.test(ua) || (/Safari/.test(ua) && !/Chrome|Chromium|Android|Edg/.test(ua));
   const base = "/api/cameras/play/api/";
-  return apple ? `${base}stream.m3u8?src=${stream}&mp4` : `${base}stream.mp4?src=${stream}`;
+  const tk = window.ZH_TOKEN ? `&token=${encodeURIComponent(window.ZH_TOKEN)}` : ""; // <video> не умеет слать заголовки
+  return apple ? `${base}stream.m3u8?src=${stream}&mp4${tk}` : `${base}stream.mp4?src=${stream}${tk}`;
 }
 const homeCams = { gen: 0, edit: false };
 function homeCamsStop() {
@@ -1135,7 +1152,7 @@ function start() {
 document.addEventListener("DOMContentLoaded", async () => {
   try {
     const info = await api("/api/home/pin-info");
-    if (info.authed) { $("#app").classList.remove("hidden"); start(); }
+    if (info.authed || window.ZH_TOKEN) { $("#login").classList.add("hidden"); $("#app").classList.remove("hidden"); start(); }
     else showLock();
   } catch (e) { showLock(); }
 });

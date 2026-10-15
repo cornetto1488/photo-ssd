@@ -193,7 +193,7 @@ function kioskStopCams() {
 async function kioskCams() {
   kioskStopCams();
   const box = $("#kCams"); if (!box) return;
-  if (kNight()) { box.classList.add("hidden"); return; }
+  if (kNight() || window.ZH_NOCAMS) { box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
   if (typeof cams === "undefined") return;
   if (!cams.loaded) await camsLoadConfig();
@@ -236,7 +236,8 @@ function kioskStart() {
   kk.timers.push(setInterval(() => { const d = $("#kDrift"); if (d) d.style.transform = `translate(${Math.round(Math.random() * 20 - 10)}px, ${Math.round(Math.random() * 20 - 10)}px)`; }, 60000));
   let wasNight = kNight();
   kk.timers.push(setInterval(() => { if (kNight() !== wasNight) { wasNight = kNight(); kioskCams(); } }, 30000));
-  try { const el = document.documentElement; if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {}); } catch (e) {}
+  const wp = document.documentElement.classList.contains("wp");
+  try { const el = document.documentElement; if (!wp && !document.fullscreenElement && el.requestFullscreen) el.requestFullscreen().catch(() => {}); } catch (e) {}
   document.addEventListener("keydown", kioskKey);
 }
 function kioskKey(e) { if (e.key === "Escape" && kk.on) kioskExit(); }
