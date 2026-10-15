@@ -4,40 +4,45 @@
 <meta charset="utf-8">
 <title>ZALET HOME — киоск</title>
 <style>
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #060608; font-family: "Segoe UI", sans-serif; }
-  iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #060608; }
-  #msg { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; text-align: center; color: #f2f0ed; padding: 40px; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #060608; font-family: "Segoe UI", sans-serif; color: #f2f0ed; }
+  #msg { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 40px; }
   #msg div { max-width: 640px; line-height: 1.5; }
   #msg b { display: block; font-size: 34px; margin-bottom: 14px; background: linear-gradient(135deg, #ff8a4c, #ff5a1f); -webkit-background-clip: text; color: transparent; }
   #msg span { color: #8c8c96; font-size: 18px; }
 </style>
 </head>
 <body>
-<iframe id="f" allow="autoplay; fullscreen"></iframe>
-<div id="msg"><div><b>ZALET HOME</b><span>Открой свойства обоев и вставь «Ключ доступа».<br>Он есть в панели: Роутер → Токен.</span></div></div>
+<div id="msg"><div><b>ZALET HOME</b><span id="t">Подключаюсь к панели…</span></div></div>
 <script>
-  // Настройки приходят из свойств обоев Wallpaper Engine. Для проверки в обычном браузере можно открыть:
-  // index.html?home=http://192.168.1.1&token=КЛЮЧ
+  // Wallpaper Engine не показывает вложенные страницы (iframe), поэтому обои сами переходят на панель дома.
+  // Настройки (адрес, ключ, зона для значков, быстрые папки) приходят из свойств обоев и передаются панели в адресе.
   var q = new URLSearchParams(location.search);
-  var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.get("nocams") === "1" };
-  var f = document.getElementById("f"), msg = document.getElementById("msg");
-  function apply() {
-    if (!cfg.token) { msg.style.display = "flex"; f.removeAttribute("src"); f.dataset.u = ""; return; }
-    msg.style.display = "none";
-    var u = cfg.home.replace(/\/+$/, "") + "/?wp=1&token=" + encodeURIComponent(cfg.token) + (cfg.nocams ? "&nocams=1" : "") + "#kiosk";
-    if (f.dataset.u !== u) { f.dataset.u = u; f.src = u; }
+  var DEF_FOLDERS = "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos;Проекты|C:\\Users\\muall\\Documents\\Проекты;Загрузки|C:\\Users\\muall\\Downloads";
+  var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.get("nocams") === "1",
+              zonewidth: 190, zonemode: "orange", quick: true, folders: DEF_FOLDERS };
+  var go = null, got = false;
+  function b64(s) { return btoa(unescape(encodeURIComponent(s))); }
+  function launch() {
+    if (!cfg.token) { document.getElementById("t").innerHTML = "Открой свойства обоев и вставь «Ключ доступа».<br>Он есть в панели: Роутер → Токен."; return; }
+    var u = cfg.home.replace(/\/+$/, "") + "/?wp=1&token=" + encodeURIComponent(cfg.token) +
+      "&nocams=" + (cfg.nocams ? "1" : "0") + "&zone=" + Math.round(cfg.zonewidth) + "&zmode=" + cfg.zonemode +
+      "&quick=" + (cfg.quick ? "1" : "0") + "&folders=" + encodeURIComponent(b64(cfg.folders)) + "#kiosk";
+    if (u !== go) { go = u; location.replace(u); }
   }
   window.wallpaperPropertyListener = {
     applyUserProperties: function (p) {
+      got = true;
       if (p.homeurl) cfg.home = String(p.homeurl.value || cfg.home).trim();
       if (p.token) cfg.token = String(p.token.value || "").trim();
       if (p.nocams) cfg.nocams = !!p.nocams.value;
-      apply();
+      if (p.zonewidth) cfg.zonewidth = Number(p.zonewidth.value) || 190;
+      if (p.zonemode) cfg.zonemode = String(p.zonemode.value);
+      if (p.quick) cfg.quick = !!p.quick.value;
+      if (p.folders) cfg.folders = String(p.folders.value || "");
+      launch();
     }
   };
-  apply();
-  // если панель недоступна (роутер перезагружается) — тихо пробуем снова
-  f.addEventListener("error", function () { setTimeout(function () { f.dataset.u = ""; apply(); }, 15000); });
+  setTimeout(function () { if (!got) launch(); }, 2500); // если свойства не пришли — пробуем с тем, что есть
 </script>
 </body>
 </html>

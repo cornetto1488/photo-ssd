@@ -19,6 +19,7 @@ function kioskBuild() {
           <div class="k-light-all"><button class="k-btn on" data-kl="on">${K_ICON.sun}<span>Включить всё</span></button><button class="k-btn off" data-kl="off">${K_ICON.moon}<span>Выключить всё</span></button></div>
           <div class="k-rooms" id="kRooms"></div>
         </div>
+        <div class="k-quick hidden" id="kQuick"></div>
         <div class="k-tiles" id="kTiles"></div>
       </div>
       <div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div>
@@ -26,6 +27,7 @@ function kioskBuild() {
       <div class="k-ticker" id="kTicker"></div>
     </div>
     <button class="k-exit" id="kExit" title="Выйти из киоска">✕</button>`;
+  kioskWpInit();
   $("#kExit").onclick = kioskExit;
   root.addEventListener("pointerdown", kioskPoke);
   root.addEventListener("mousemove", kioskPoke);
@@ -88,6 +90,38 @@ async function kioskTicker() {
   let i = 0;
   const show = () => { const e = items[i++ % items.length]; el.innerHTML = `<span class="k-dot"></span><b>${kEsc(e.text)}</b><small>${kAgo(e.t)}</small>`; el.classList.remove("swap"); void el.offsetWidth; el.classList.add("swap"); };
   clearInterval(kk.tick); show(); kk.tick = setInterval(show, 7000); kk.timers.push(kk.tick);
+}
+
+// ---- обои Wallpaper Engine: оранжевая зона под значки рабочего стола и быстрые папки ----
+const K_ICO = {
+  drive: '<svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="9" rx="2.5"/><path d="M7 12.5h.01M11 12.5h6M5 8l1.6-3.2A2 2 0 0 1 8.4 3.7h7.2a2 2 0 0 1 1.8 1.1L19 8"/></svg>',
+  folder: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>',
+  image: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-8 8"/></svg>',
+  down: '<svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/></svg>',
+  code: '<svg viewBox="0 0 24 24"><path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5.5l-3 13"/></svg>',
+};
+const kIcoFor = (n, p) => { const s = (n + " " + p).toLowerCase(); return /\\\\|хранил|диск|ssd|nas/.test(s) && !/фото|photo/.test(s) ? K_ICO.drive : /фото|photo|image|картин/.test(s) ? K_ICO.image : /загруз|download/.test(s) ? K_ICO.down : /проект|code|dev|git/.test(s) ? K_ICO.code : K_ICO.folder; };
+const kB64u = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+function kioskOpenFolder(path) {
+  // открывает папку в проводнике через зарегистрированный протокол zaletopen: (см. «Установить кнопки папок.cmd»)
+  const a = document.createElement("a"); a.href = "zaletopen://open/?p=" + kB64u(path); document.body.appendChild(a); a.click(); a.remove();
+}
+function kioskWpInit() {
+  const W = window.ZH_WP; if (!W) return;
+  const root = $("#kiosk");
+  const z = W.orange ? W.zone : 0;
+  document.documentElement.style.setProperty("--wpz", z + "px");
+  if (W.orange && z > 0 && !$("#wpZone")) {
+    const el = document.createElement("div"); el.id = "wpZone"; el.className = "wp-zone"; el.innerHTML = "<span>РАБОЧИЕ ЗНАЧКИ</span>";
+    root.appendChild(el);
+  }
+  const q = $("#kQuick");
+  if (q && W.quick && W.folders.length) {
+    q.classList.remove("hidden");
+    q.innerHTML = '<div class="k-lab">БЫСТРЫЙ ДОСТУП</div><div class="k-quick-row">' + W.folders.map((f, i) =>
+      '<button class="k-q' + (i === 0 ? " main" : "") + '" data-i="' + i + '" title="' + kEsc(f.p) + '"><i>' + kIcoFor(f.n, f.p) + "</i><span>" + kEsc(f.n) + "</span></button>").join("") + "</div>";
+    $$(".k-q", q).forEach((b) => b.onclick = () => { const f = W.folders[Number(b.dataset.i)]; if (f) kioskOpenFolder(f.p); });
+  }
 }
 
 // ---- свет: всё сразу и по комнатам ----
@@ -193,7 +227,8 @@ function kioskStopCams() {
 async function kioskCams() {
   kioskStopCams();
   const box = $("#kCams"); if (!box) return;
-  if (kNight() || window.ZH_NOCAMS) { box.classList.add("hidden"); return; }
+  const hevc = (() => { try { return !!document.createElement("video").canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'); } catch (e) { return false; } })();
+  if (kNight() || window.ZH_NOCAMS || !hevc) { box.classList.add("hidden"); return; } // у обоев (и части браузеров) нет декодера H.265
   box.classList.remove("hidden");
   if (typeof cams === "undefined") return;
   if (!cams.loaded) await camsLoadConfig();

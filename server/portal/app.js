@@ -5,7 +5,30 @@
   let t = q.get("token") || "";
   try { if (t) sessionStorage.setItem("zh-token", t); else t = sessionStorage.getItem("zh-token") || ""; } catch (e) {}
   window.ZH_TOKEN = t;
-  if (q.get("wp") === "1") document.documentElement.classList.add("wp");
+  if (q.get("wp") === "1") {
+    document.documentElement.classList.add("wp");
+    const b64d = (s) => { try { return decodeURIComponent(escape(atob(s))); } catch (e) { return ""; } };
+    const folders = b64d(q.get("folders") || "").split(";").map((x) => x.split("|")).filter((x) => x.length >= 2 && x[0].trim() && x[1].trim()).map((x) => ({ n: x[0].trim(), p: x.slice(1).join("|").trim() })).slice(0, 8);
+    const z = Number(q.get("zone"));
+    window.ZH_WP = { zone: Number.isFinite(z) && q.get("zone") !== null ? Math.max(0, Math.min(500, z)) : 190, orange: q.get("zmode") !== "off", folders, quick: q.get("quick") !== "0" };
+    // обои присылают изменения свойств (ключ, зона, папки) — пересобираем адрес и перезагружаемся, защита от зацикливания
+    window.wallpaperPropertyListener = {
+      applyUserProperties(p) {
+        const cur = new URLSearchParams(location.search); let changed = false;
+        const set = (k, v) => { if (String(cur.get(k) ?? "") !== String(v)) { cur.set(k, v); changed = true; } };
+        const b64e = (s) => btoa(unescape(encodeURIComponent(s)));
+        if (p.token && String(p.token.value || "").trim()) set("token", String(p.token.value).trim());
+        if (p.nocams) set("nocams", p.nocams.value ? "1" : "0");
+        if (p.zonewidth) set("zone", Math.round(p.zonewidth.value));
+        if (p.zonemode) set("zmode", p.zonemode.value);
+        if (p.quick) set("quick", p.quick.value ? "1" : "0");
+        if (p.folders) set("folders", b64e(String(p.folders.value || "")));
+        if (!changed) return;
+        let n = 0; try { n = Number(sessionStorage.getItem("zh-wp-reloads") || 0); sessionStorage.setItem("zh-wp-reloads", String(n + 1)); } catch (e) {}
+        if (n < 4) location.replace(location.origin + "/?" + cur.toString() + "#kiosk");
+      },
+    };
+  }
   if (q.get("nocams") === "1") window.ZH_NOCAMS = true;
   if (t) {
     const rf = window.fetch.bind(window);

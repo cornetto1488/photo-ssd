@@ -86,7 +86,7 @@ class DreameMap3D {
       if (this.opts.autoRotate && idle && !this.dragging && !this.selected.size) { this.yaw += 0.0022; this._dirty = true; }
       if (this.progress < 1) { this.progress = Math.min(1, (t - this.anim) / 5000); this._dirty = true; }
       this._pulse = (t % 1600) / 1600;
-      if ((this._dirty || this.opts.autoRotate || this.progress < 1) && t - (this._last || 0) > 28) { this._dirty = false; this._last = t; this.draw(t); }
+      if ((this._dirty || this.opts.autoRotate || this.progress < 1) && t - (this._last || 0) > (document.documentElement.classList.contains("wp") ? 55 : 28)) { this._dirty = false; this._last = t; this.draw(t); }
       requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);

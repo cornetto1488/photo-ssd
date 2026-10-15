@@ -1,12 +1,12 @@
 {
   "title": "ZALET HOME — киоск",
-  "description": "Панель дома на рабочем столе: часы, погода, 3D-карта, камеры и кнопки света. Нужен адрес панели и ключ доступа (в панели: Роутер → Токен).",
+  "description": "Панель дома на рабочем столе: часы, погода, 3D-карта, кнопки света, оранжевая зона под значки и быстрые папки. Нужен ключ доступа (в панели: Роутер → Токен).",
   "type": "web",
   "file": "index.html",
   "preview": "preview.jpg",
   "contentrating": "Everyone",
   "tags": ["Utility"],
-  "version": 1,
+  "version": 2,
   "general": {
     "properties": {
       "homeurl": {
@@ -21,9 +21,40 @@
         "type": "textinput",
         "value": ""
       },
-      "nocams": {
+      "zonemode": {
         "order": 2,
-        "text": "Без камер (легче для видеокарты)",
+        "text": "Оранжевая зона под значки рабочего стола",
+        "type": "combo",
+        "options": [
+          { "label": "Показывать", "value": "orange" },
+          { "label": "Скрыть", "value": "off" }
+        ],
+        "value": "orange"
+      },
+      "zonewidth": {
+        "order": 3,
+        "text": "Ширина зоны под значки, px",
+        "type": "slider",
+        "min": 90,
+        "max": 420,
+        "step": 5,
+        "value": 190
+      },
+      "quick": {
+        "order": 4,
+        "text": "Кнопки быстрых папок (хранилище и др.)",
+        "type": "bool",
+        "value": true
+      },
+      "folders": {
+        "order": 5,
+        "text": "Папки: Название|путь;Название|путь (первая — главная кнопка)",
+        "type": "textinput",
+        "value": "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos;Проекты|C:\\Users\\muall\\Documents\\Проекты;Загрузки|C:\\Users\\muall\\Downloads"
+      },
+      "nocams": {
+        "order": 6,
+        "text": "Без камер (камеры нужен кодек H.265)",
         "type": "bool",
         "value": false
       }
