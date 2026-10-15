@@ -648,3 +648,8 @@ html.wp .k-time i { color: var(--wp-or, #ff5a1f) !important; }
 .wordmark .home { font-size: 9px; align-self: center; }
 .wordmark.big { font-size: 64px; }
 .pin-wrap .wordmark.big { font-size: 52px; }
+
+/* ZALET Setup на странице роутера */
+.setup-card p { margin: 0 0 12px; }
+.setup-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.setup-cmd { margin: 8px 0 0; background: #050507; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: 12px var(--mono); color: var(--ink); overflow-x: auto; white-space: pre; user-select: all; }

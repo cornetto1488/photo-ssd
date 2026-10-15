@@ -1173,6 +1173,7 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/dreame/mapraw":  p.handleDreameMapRaw,
 		"/api/home/dreame/map":     p.handleDreameMap,
 		"/api/home/dreame/rooms":   p.handleDreameRooms,
+		"/api/home/setup/download": p.handleSetupDownload,
 		"/api/home/daichi":         p.handleDaichi,
 		"/api/home/daichi/ctrl":    p.handleDaichiCtrl,
 		"/api/home/daichi/login":   p.handleDaichiLogin,
@@ -1189,6 +1190,7 @@ func (p *homePortal) handler() http.Handler {
 	for k, h := range api {
 		mux.HandleFunc(k, p.s.auth(h))
 	}
+	mux.HandleFunc("/dl/", handleSetupPublic) // утилита ZALET Setup без ключа
 	mux.HandleFunc("/api/home/pin-info", p.pin.handleInfo)
 	mux.HandleFunc("/api/home/login", p.pin.handleLogin)
 	mux.HandleFunc("/api/home/logout", p.pin.handleLogout)

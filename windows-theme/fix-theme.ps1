@@ -44,4 +44,4 @@ Get-ChildItem -Path (Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Explorer') -
 Start-Sleep -Seconds 1
 if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe }
 Write-Host 'Готово. Если «Пуск» ещё серый — выйдите из Windows и войдите снова (или перезагрузите ПК).' -ForegroundColor Green
-Read-Host 'Нажми Enter, чтобы закрыть'
+if (-not $env:ZALET_NOPAUSE) { Read-Host 'Нажми Enter, чтобы закрыть' }

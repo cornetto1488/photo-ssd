@@ -18,10 +18,12 @@
   // Wallpaper Engine не показывает вложенные страницы (iframe), поэтому обои сами переходят на панель дома.
   // Настройки (адрес, ключ, зона под значки, быстрые папки) приходят из свойств обоев и передаются панели в адресе.
   var q = new URLSearchParams(location.search);
-  var DEF_FOLDERS = "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos;Проекты|C:\\Users\\muall\\Documents\\Проекты;Загрузки|C:\\Users\\muall\\Downloads";
+  var DEF_FOLDERS = "Хранилище|\\\\192.168.1.1\\SSD;Фото|\\\\192.168.1.1\\SSD\\Photos";
   var cfg = { home: q.get("home") || "http://192.168.1.1", token: q.get("token") || "", nocams: q.has("nocams") ? q.get("nocams") === "1" : false,
               iconcols: 1, iconslots: 5, iconw: 75, iconh: 113, zonemode: "orange", quick: true, folders: DEF_FOLDERS };
   if (window.ZH_LOCAL_TOKEN && !cfg.token) cfg.token = window.ZH_LOCAL_TOKEN;
+  if (window.ZH_LOCAL_HOME && !q.get("home")) cfg.home = window.ZH_LOCAL_HOME;
+  if (window.ZH_LOCAL_FOLDERS) cfg.folders = window.ZH_LOCAL_FOLDERS;
   var go = null, got = false;
   function b64(s) { return btoa(unescape(encodeURIComponent(s))); }
   function launch() {

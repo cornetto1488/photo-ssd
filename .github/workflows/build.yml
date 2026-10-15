@@ -23,10 +23,15 @@ jobs:
           # агент ZALET для ПК (Windows и Linux) — встраивается в сервер, скачивается с сайта
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -H windowsgui" -o portal/agent/zalet-agent.exe ./cmd/zalet-agent
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o portal/agent/zalet-agent-linux ./cmd/zalet-agent
+          # ZALET Setup — утилита настройки нового ПК (окно в браузере или терминал), тоже раздаётся с роутера
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o portal/agent/zalet.exe ./cmd/zalet
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o portal/agent/zalet-linux ./cmd/zalet
+          CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o portal/agent/zalet-linux-arm64 ./cmd/zalet
+          GOOS=windows go vet ./cmd/zalet
           GOOS=windows go vet ./cmd/zalet-agent
           go vet ./...
           CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o ../dist/photossd-linux-arm64 .
-          cp portal/agent/zalet-agent.exe portal/agent/zalet-agent-linux ../dist/
+          cp portal/agent/zalet-agent.exe portal/agent/zalet-agent-linux portal/agent/zalet.exe portal/agent/zalet-linux ../dist/
       - uses: actions/upload-artifact@v4
         with:
           name: photossd-server
@@ -34,6 +39,8 @@ jobs:
             dist/photossd-linux-arm64
             dist/zalet-agent.exe
             dist/zalet-agent-linux
+            dist/zalet.exe
+            dist/zalet-linux
 
   ios:
     runs-on: macos-15

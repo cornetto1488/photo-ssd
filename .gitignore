@@ -8,3 +8,4 @@ server/portal/fonts/
 server/portal/agent/*.exe
 server/portal/agent/zalet-agent-linux
 wallpaper-engine/token.js
+server/portal/agent/zalet-linux*

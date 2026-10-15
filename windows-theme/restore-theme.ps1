@@ -29,4 +29,4 @@ if ($k) { Start-Process powershell -Verb RunAs -ArgumentList '-NoProfile', '-Exe
 & ie4uinit.exe -show
 Get-Process explorer | Stop-Process -Force
 Write-Host 'Готово: прежняя тема и иконки возвращены.' -ForegroundColor Green
-Read-Host 'Нажми Enter, чтобы закрыть'
+if (-not $env:ZALET_NOPAUSE) { Read-Host 'Нажми Enter, чтобы закрыть' }

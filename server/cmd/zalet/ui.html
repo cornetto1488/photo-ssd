@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ZALET Setup</title>
+<style>
+  :root { --bg: #040406; --s1: #0a0a0e; --s2: #111116; --line: rgba(255,255,255,.08); --line2: rgba(255,255,255,.14);
+          --ink: #f4f1ec; --muted: #85858f; --dim: #5a5a63; --acc: #ff5a1f; --ok: #3be08c; --bad: #ff5d5d; --warn: #ffb020;
+          --mono: "JetBrains Mono", "Cascadia Mono", Consolas, ui-monospace, monospace; --sans: "Segoe UI", Inter, system-ui, sans-serif; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 var(--sans); }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 20px 60px; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+  .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--acc); display: grid; place-items: center; flex: none; }
+  .logo svg { width: 22px; height: 22px; fill: none; stroke: #160802; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+  h1 { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.01em; }
+  h1 b { color: var(--acc); }
+  .sub { color: var(--muted); font-size: 13px; }
+  .lab { font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  .card { background: var(--s1); border: 1px solid var(--line); border-radius: 20px; padding: 20px; margin-bottom: 16px; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 760px) { .grid2 { grid-template-columns: 1fr; } }
+  input { flex: 1 1 200px; min-width: 0; background: var(--s2); border: 1px solid var(--line2); color: var(--ink); border-radius: 12px; padding: 11px 13px; font: inherit; outline: none; }
+  input:focus { border-color: var(--acc); }
+  button { border: 1px solid var(--line2); background: var(--s2); color: var(--ink); border-radius: 12px; padding: 10px 16px; font: 600 14px var(--sans); cursor: pointer; transition: .15s; }
+  button:hover:not(:disabled) { border-color: var(--acc); }
+  button:disabled { opacity: .45; cursor: default; }
+  button.acc { background: var(--acc); color: #160802; border-color: transparent; }
+  button.ghost { background: transparent; }
+  button.big { padding: 14px 22px; font-size: 16px; }
+  .status { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 15px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--dim); flex: none; }
+  .dot.ok { background: var(--ok); box-shadow: 0 0 10px rgba(59,224,140,.5); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+  .err { color: var(--bad); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .hint { color: var(--muted); font-size: 13px; margin-top: 10px; }
+  .comp { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 14px 0; border-top: 1px solid var(--line); }
+  .comp:first-of-type { border-top: 0; }
+  .comp b { font-size: 15px; } .comp p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+  .chip { display: inline-block; font: 600 11px var(--mono); letter-spacing: .06em; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line2); color: var(--muted); margin-left: 8px; vertical-align: 2px; }
+  .chip.ok { color: var(--ok); border-color: rgba(59,224,140,.4); } .chip.no { color: var(--dim); }
+  .comp.off { opacity: .5; }
+  .acts { display: flex; gap: 8px; }
+  .log { background: #020203; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; height: 240px; overflow: auto; font: 12.5px/1.6 var(--mono); color: #c9c5be; white-space: pre-wrap; }
+  .log .ok { color: var(--ok); } .log .bad { color: var(--bad); } .log .head { color: var(--acc); }
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+  .busy { color: var(--acc); font: 600 12px var(--mono); }
+  footer { display: flex; justify-content: space-between; color: var(--dim); font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo"><svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5M5.5 9.6V20h13V9.6M10 20v-5.5h4V20"/></svg></div>
+    <div><h1><b>ZA</b>LET Setup</h1><div class="sub" id="who">проверяю компьютер…</div></div>
+  </header>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="lab">Роутер</div>
+      <div class="status"><i class="dot" id="rDot"></i><span id="rText">проверяю…</span></div>
+      <div class="row"><input id="rAddr" placeholder="адрес: пусто — найти самому (дом или Tailscale)"></div>
+      <div class="row" style="margin-top:10px"><input id="rKey" type="password" placeholder="PIN панели или ключ (токен)" autocomplete="off"><button class="acc" id="rGo">Подключить</button></div>
+      <div class="err" id="rErr"></div>
+      <div class="row"><button class="ghost" id="rOpen">Открыть панель</button><button class="ghost" id="rForget">Забыть ключ</button></div>
+      <div class="hint">PIN — тот же, что для входа в панель. Ключ хранится только в вашем профиле на этом компьютере.</div>
+    </div>
+    <div class="card">
+      <div class="lab">Tailscale — дом из любого места</div>
+      <div class="status"><i class="dot" id="tDot"></i><span id="tText">проверяю…</span></div>
+      <div class="row"><button id="tGo">Установить Tailscale</button></div>
+      <div class="hint">Нужен, чтобы этот компьютер видел роутер не из дома. Войдите тем же аккаунтом, что и на роутере.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="bar"><div class="lab" style="margin:0">Что поставить на этот компьютер</div><button class="acc big" id="all">Установить всё</button></div>
+    <div id="comps"></div>
+  </div>
+
+  <div class="card">
+    <div class="bar"><div class="lab" style="margin:0">Журнал</div><span class="busy" id="busy"></span></div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <footer><span id="ver"></span><button class="ghost" id="quit">Закрыть программу</button></footer>
+</div>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+let st = null, next = 0, busy = "";
+async function api(p, body) {
+  const r = await fetch(p, body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  return r.json();
+}
+function render() {
+  if (!st) return;
+  const osn = { windows: "Windows", linux: "Linux" }[st.os] || st.os;
+  $("#who").textContent = osn + " · " + st.host;
+  $("#ver").textContent = "ZALET Setup " + st.version;
+  const rd = $("#rDot"); rd.className = "dot " + (st.connected ? "ok" : st.reachable ? "warn" : "bad");
+  $("#rText").textContent = st.connected ? "подключено — " + st.router : st.reachable ? "роутер найден (" + st.router + "), нужен PIN или ключ" : "роутер " + st.router + " не отвечает";
+  if (!$("#rAddr").value && st.router) $("#rAddr").placeholder = "адрес: " + st.router + " (пусто — найти самому)";
+  const t = st.tailscale || {}, td = $("#tDot");
+  td.className = "dot " + (t.running && t.routerIP && t.routerOnline ? "ok" : t.installed ? "warn" : "bad");
+  $("#tText").textContent = !t.installed ? "не установлен" : !t.running ? "установлен, но не подключён (" + (t.state || "?") + ")" :
+    t.routerIP ? "подключён · этот ПК " + t.self + " · роутер " + t.routerIP + (t.routerOnline ? " в сети" : " не в сети") : "подключён (" + t.self + "), роутер в вашей сети Tailscale не найден";
+  $("#tGo").textContent = t.installed ? (t.running ? "Переподключить" : "Подключить Tailscale") : "Установить Tailscale";
+  $("#comps").innerHTML = (st.components || []).map((c) => `
+    <div class="comp ${c.supported ? "" : "off"}">
+      <div><b>${esc(c.title)}</b><span class="chip ${c.installed ? "ok" : "no"}">${esc(c.detail)}</span><p>${esc(c.desc)}</p></div>
+      <div class="acts">
+        ${c.supported ? `<button data-run="${c.id}">${c.installed ? "Повторить" : "Установить"}</button>` : ""}
+        ${c.supported && c.canUndo && c.installed ? `<button class="ghost" data-undo="${c.id}">Отменить</button>` : ""}
+      </div>
+    </div>`).join("");
+  document.querySelectorAll("[data-run]").forEach((b) => b.onclick = () => run(b.dataset.run, false));
+  document.querySelectorAll("[data-undo]").forEach((b) => b.onclick = () => { if (confirm("Отменить «" + b.closest(".comp").querySelector("b").textContent + "»?")) run(b.dataset.undo, true); });
+  setBusy();
+}
+function setBusy() {
+  $("#busy").textContent = busy ? "выполняется: " + busy + "…" : "";
+  document.querySelectorAll("[data-run],[data-undo],#all,#tGo").forEach((b) => b.disabled = !!busy);
+}
+function addLine(l) {
+  const d = document.createElement("div");
+  d.textContent = l;
+  if (l.startsWith("✓")) d.className = "ok"; else if (l.startsWith("✗")) d.className = "bad"; else if (l.startsWith("—")) d.className = "head";
+  const box = $("#log"); box.appendChild(d); box.scrollTop = box.scrollHeight;
+}
+async function load() { try { st = await api("/api/state"); busy = st.busy || busy; render(); } catch (e) { $("#rText").textContent = "программа закрыта"; } }
+async function poll() {
+  try {
+    const j = await api("/api/log?since=" + next);
+    (j.lines || []).forEach(addLine); next = j.next;
+    const was = busy; busy = j.busy || ""; setBusy();
+    if (was && !busy) load();
+    setTimeout(poll, busy ? 600 : 1500);
+  } catch (e) { $("#busy").textContent = "программа закрыта"; }
+}
+async function run(id, undo) {
+  const j = await api("/api/run", { id, undo });
+  if (j.error) { addLine("✗ " + j.error); return; }
+  busy = id; setBusy();
+}
+$("#rGo").onclick = async () => {
+  $("#rErr").textContent = ""; $("#rGo").disabled = true; $("#rText").textContent = "подключаюсь…";
+  const j = await api("/api/connect", { router: $("#rAddr").value, secret: $("#rKey").value });
+  $("#rGo").disabled = false;
+  if (j.error) $("#rErr").textContent = j.error; else $("#rKey").value = "";
+  load();
+};
+$("#rKey").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#rGo").click(); });
+$("#rOpen").onclick = () => api("/api/open", {});
+$("#rForget").onclick = async () => { if (confirm("Забыть ключ на этом компьютере?")) { await api("/api/forget", {}); load(); } };
+$("#tGo").onclick = () => run("tailscale", false);
+$("#all").onclick = () => run("all", false);
+$("#quit").onclick = async () => { await api("/api/quit", {}).catch(() => {}); document.body.innerHTML = '<div class="wrap"><h1>Готово</h1><p class="sub">Программа закрыта, это окно можно закрыть.</p></div>'; };
+load(); poll();
+setInterval(() => { if (!busy) load(); }, 20000);
+</script>
+</body>
+</html>

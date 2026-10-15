@@ -59,4 +59,4 @@ Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force   # П�
 Write-Host ''
 Write-Host 'Готово: чёрно-оранжевая тема применена.' -ForegroundColor Green
 Write-Host 'Вернуть как было: restore-theme.cmd' -ForegroundColor Yellow
-Read-Host 'Нажми Enter, чтобы закрыть'
+if (-not $env:ZALET_NOPAUSE) { Read-Host 'Нажми Enter, чтобы закрыть' }

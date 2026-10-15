@@ -52,4 +52,4 @@ foreach ($c in $cache) { if (Test-Path $c) { [IO.File]::Delete($c) } }
 Start-Sleep -Seconds 1
 if (-not (Get-Process explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe }
 Write-Host 'Готово. Цвет выделения полностью применится после выхода из Windows и входа снова.' -ForegroundColor Green
-Read-Host 'Нажми Enter, чтобы закрыть'
+if (-not $env:ZALET_NOPAUSE) { Read-Host 'Нажми Enter, чтобы закрыть' }

@@ -3,6 +3,8 @@
 # Безопасность: только существующие папки; сетевые — только на роутере; файлы и программы не запускаются.
 $ErrorActionPreference = 'SilentlyContinue'
 $allowedHosts = @('192.168.1.1')
+$extraHosts = Join-Path $PSScriptRoot 'hosts.txt'
+if (Test-Path $extraHosts) { $allowedHosts += @(Get-Content $extraHosts | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
 try {
   $m = [regex]::Match($Url, '[?&]p=([^&#"]+)')
   if (-not $m.Success) { exit }

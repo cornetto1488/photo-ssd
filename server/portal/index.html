@@ -318,6 +318,18 @@
         <div class="mono-label"><span class="acc">// ПОДКЛЮЧЕНИЯ</span> ЛОГИН И ПАРОЛЬ DAICHI И V2RAYA</div>
       </div>
       <div class="card" id="accCard"></div>
+
+      <div class="section-head">
+        <div class="mono-label"><span class="acc">// ZALET SETUP</span> НАСТРОЙКА НОВОГО КОМПЬЮТЕРА</div>
+      </div>
+      <div class="card setup-card">
+        <p class="muted small">Одна программа подключает новый компьютер ко всему сразу: сетевой диск, обои, кнопки папок, агент ПК, тема ZALET, ярлык панели — и проверяет Tailscale. Работает на Windows и Linux, открывает своё окно настройки. Скачанный здесь файл уже знает адрес роутера и ключ — не пересылайте его чужим.</p>
+        <div class="setup-btns"><a class="btn btn-acc" href="/api/home/setup/download?os=windows">⬇ Для Windows</a><a class="btn" href="/api/home/setup/download?os=linux">⬇ Для Linux</a><a class="btn" href="/api/home/setup/download?os=linux-arm64">⬇ Linux ARM</a></div>
+        <div class="mono-label" style="margin-top:16px">ИЛИ КОМАНДОЙ — ПРОГРАММА СПРОСИТ PIN ПАНЕЛИ</div>
+        <pre class="setup-cmd">curl.exe -o zalet.exe http://192.168.1.1/dl/zalet.exe &amp;&amp; zalet.exe</pre>
+        <pre class="setup-cmd">curl -fo zalet http://192.168.1.1/dl/zalet-linux &amp;&amp; chmod +x zalet &amp;&amp; ./zalet</pre>
+        <p class="muted small">Не из дома — через Tailscale замените 192.168.1.1 на адрес роутера в Tailscale. В терминале без окна: <code>zalet -cli</code>.</p>
+      </div>
     </section>
 
     <!-- КАМЕРЫ MODUS -->

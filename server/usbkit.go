@@ -121,5 +121,15 @@ func (p *homePortal) handleUSBKit(w http.ResponseWriter, r *http.Request) {
 			add("флешка/ZALET Agent/"+a[1], mode, io.MultiReader(strings.NewReader(string(b)), strings.NewReader("\nZALETCFG"+string(cfg))))
 		}
 	}
+	// ZALET Setup — настройка нового компьютера одной программой, адрес и ключ уже внутри
+	for _, s := range [][3]string{{"windows", "ZALET-Setup.exe", "644"}, {"linux", "zalet", "755"}} {
+		if b, _, err := setupPayload(s[0], p.setupConfig()); err == nil {
+			mode := os.FileMode(0o644)
+			if s[2] == "755" {
+				mode = 0o755
+			}
+			add("флешка/ZALET Setup/"+s[1], mode, strings.NewReader(string(b)))
+		}
+	}
 	log.Printf("панель: скачан комплект флешки (%s)", clientIP(r))
 }

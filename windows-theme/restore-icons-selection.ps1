@@ -20,4 +20,4 @@ foreach ($dir in Get-ChildItem ([Environment]::GetFolderPath('Desktop')) -Direct
 & ie4uinit.exe -show
 Get-Process explorer | Stop-Process -Force
 Write-Host 'Готово: прежние иконки и цвет выделения возвращены (цвет — после повторного входа в Windows).' -ForegroundColor Green
-Read-Host 'Нажми Enter, чтобы закрыть'
+if (-not $env:ZALET_NOPAUSE) { Read-Host 'Нажми Enter, чтобы закрыть' }
