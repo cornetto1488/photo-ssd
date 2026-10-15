@@ -37,8 +37,11 @@
   window.wallpaperPropertyListener = {
     applyUserProperties: function (p) {
       got = true;
-      if (p.homeurl) cfg.home = String(p.homeurl.value || cfg.home).trim();
-      if (p.token) cfg.token = String(p.token.value || "").trim();
+      // пустые свойства (или адрес по умолчанию) не затирают то, что записала утилита ZALET Setup в token.js
+      var hv = p.homeurl ? String(p.homeurl.value || "").trim() : "";
+      if (hv && !(window.ZH_LOCAL_HOME && hv === "http://192.168.1.1")) cfg.home = hv;
+      var tv = p.token ? String(p.token.value || "").trim() : "";
+      if (tv) cfg.token = tv;
       if (p.nocams) cfg.nocams = !!p.nocams.value;
       if (p.iconcols) cfg.iconcols = Number(p.iconcols.value) || 1;
       if (p.iconslots) cfg.iconslots = Number(p.iconslots.value) || 5;
@@ -46,7 +49,8 @@
       if (p.iconh) cfg.iconh = Number(p.iconh.value) || 113;
       if (p.zonemode) cfg.zonemode = String(p.zonemode.value);
       if (p.quick) cfg.quick = !!p.quick.value;
-      if (p.folders) cfg.folders = String(p.folders.value || "");
+      var fv = p.folders ? String(p.folders.value || "").trim() : "";
+      if (fv) cfg.folders = fv;
       launch();
     }
   };

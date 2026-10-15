@@ -285,7 +285,7 @@ func runAction(id string, c Config) error {
 		dir := filepath.Join(la, "ZALET")
 		os.MkdirAll(dir, 0o755)
 		ico := filepath.Join(dir, "zalet.ico")
-		if b, err := assets.ReadFile("assets/theme/icons/zalet.ico"); err == nil {
+		if b, err := assets.ReadFile("assets/theme/icons/zalet-home.ico"); err == nil {
 			os.WriteFile(ico, b, 0o644)
 		}
 		body := "[InternetShortcut]\r\nURL=" + c.Router + "/\r\nIconFile=" + ico + "\r\nIconIndex=0\r\n"

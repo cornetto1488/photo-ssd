@@ -123,7 +123,7 @@ func runAction(id string, c Config) error {
 		dir := filepath.Join(home(), ".local", "share", "icons")
 		os.MkdirAll(dir, 0o755)
 		icon := filepath.Join(dir, "zalet-home.png")
-		if b, err := assets.ReadFile("assets/theme/icons/zalet.ico"); err == nil {
+		if b, err := assets.ReadFile("assets/theme/icons/zalet-home.ico"); err == nil {
 			if png := icoPNG(b); png != nil {
 				os.WriteFile(icon, png, 0o644)
 			}
