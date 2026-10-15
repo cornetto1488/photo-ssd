@@ -71,12 +71,14 @@ function Folder($g, [scriptblock]$glyph) {
 }
 $GP = { Pen $OR 38 }
 Icon 'folder' { param($g) Folder $g $null }
-Icon 'folder-docs' { param($g) Folder $g { param($g) $p = & $GP; $g.DrawLine($p, -110, -70, 110, -70); $g.DrawLine($p, -110, 0, 110, 0); $g.DrawLine($p, -110, 70, 40, 70) } }
-Icon 'folder-downloads' { param($g) Folder $g { param($g) $p = & $GP; $g.DrawLine($p, 0, -120, 0, 60); $g.DrawLines($p, (Pts @(-70, -5, 0, 65, 70, -5))); $g.DrawLine($p, -110, 125, 110, 125) } }
-Icon 'folder-pictures' { param($g) Folder $g { param($g) $p = & $GP; $g.DrawLines($p, (Pts @(-140, 120, -40, 10, 30, 80, 80, 35, 140, 120))); $g.DrawEllipse($p, 50, -110, 60, 60) } }
-Icon 'folder-music' { param($g) Folder $g { param($g) $p = & $GP; $g.DrawLine($p, 50, -120, 50, 80); $g.DrawLine($p, 50, -120, 130, -90); $g.DrawEllipse($p, -40, 50, 90, 75) } }
-Icon 'folder-videos' { param($g) Folder $g { param($g) $p = & $GP; $t = New-Object Drawing.Drawing2D.GraphicsPath; $t.AddPolygon((Pts @(-50, -90, 100, 0, -50, 90))); $g.DrawPath($p, $t) } }
-Icon 'folder-desktop' { param($g) Folder $g { param($g) $p = & $GP; $m = RR -130 -110 260 165 18; $g.DrawPath($p, $m); $g.DrawLine($p, 0, 55, 0, 115); $g.DrawLine($p, -60, 120, 60, 120) } }
+# Крупные отдельные значки для папок пользователя — без рамки папки, чтобы читались и в маленьком размере
+Icon 'folder-docs' { param($g) $p = Ln $g; $pg = New-Object Drawing.Drawing2D.GraphicsPath; $pg.AddLines((Pts @(290, 160, 610, 160, 754, 304, 754, 864, 290, 864))); $pg.CloseFigure(); $g.DrawPath($p, $pg); $g.DrawLines($p, (Pts @(610, 160, 610, 304, 754, 304))); $g.DrawLine($p, 390, 480, 654, 480); $g.DrawLine($p, 390, 590, 654, 590); $g.DrawLine($p, 390, 700, 560, 700) }
+Icon 'folder-downloads' { param($g) $p = Ln $g; $g.DrawLine($p, 512, 160, 512, 640); $g.DrawLines($p, (Pts @(320, 450, 512, 640, 704, 450))); $g.DrawLines($p, (Pts @(200, 690, 200, 850, 824, 850, 824, 690))) }
+Icon 'folder-pictures' { param($g) $p = Ln $g; $f = RR 160 220 704 584 70; $g.DrawPath($p, $f); $g.DrawEllipse($p, 600, 320, 120, 120); $g.DrawLines($p, (Pts @(170, 720, 410, 480, 570, 640, 660, 550, 854, 744))) }
+Icon 'gallery' { param($g) $p = Ln $g; $b = RR 290 160 574 470 60; $g.DrawPath($p, $b); $f = RR 160 330 574 500 60; $g.FillPath((Brush $K0), $f); $g.DrawPath($p, $f); $g.DrawLines($p, (Pts @(170, 760, 360, 570, 500, 710, 580, 630, 724, 774))); $g.DrawEllipse($p, 560, 420, 90, 90) }
+Icon 'folder-music' { param($g) $p = Ln $g; $g.DrawLine($p, 400, 300, 400, 720); $g.DrawLine($p, 780, 230, 780, 650); $beam = New-Object Drawing.Drawing2D.GraphicsPath; $beam.AddPolygon((Pts @(400, 300, 780, 230, 780, 330, 400, 400))); $g.FillPath((Brush $OR), $beam); $g.FillEllipse((Brush $OR), 230, 640, 190, 150); $g.FillEllipse((Brush $OR), 610, 570, 190, 150) }
+Icon 'folder-videos' { param($g) $p = Ln $g; $r = RR 140 240 744 544 90; $g.DrawPath($p, $r); $t = New-Object Drawing.Drawing2D.GraphicsPath; $t.AddPolygon((Pts @(430, 370, 660, 512, 430, 654))); $g.FillPath((Brush $OR), $t) }
+Icon 'folder-desktop' { param($g) $p = Ln $g; $m = RR 140 200 744 480 50; $g.DrawPath($p, $m); $g.DrawLine($p, 512, 680, 512, 810); $g.DrawLine($p, 340, 830, 684, 830) }
 Icon 'folder-zalet' { param($g) Folder $g { param($g) $p = & $GP; $g.DrawLines($p, (Pts @(-120, 0, 0, -105, 120, 0))); $g.DrawLines($p, (Pts @(-85, -30, -85, 120, 85, 120, 85, -30))) } }
 
 function Bin($g, [bool]$full) {

@@ -653,3 +653,15 @@ html.wp .k-time i { color: var(--wp-or, #ff5a1f) !important; }
 .setup-card p { margin: 0 0 12px; }
 .setup-btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .setup-cmd { margin: 8px 0 0; background: #050507; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; font: 12px var(--mono); color: var(--ink); overflow-x: auto; white-space: pre; user-select: all; }
+
+/* обои: прокрутки нет — панель не может «уехать» за экран */
+html.wp, html.wp body { overflow: hidden !important; overscroll-behavior: none; }
+
+/* ночной фильтр сайта не трогает киоск и обои: filter у родителя ломает position:fixed и панель схлопывается */
+body.kiosk-mode main, body.kiosk-mode .top, html.wp main, html.wp .top { filter: none !important; }
+
+/* на обоях камеры видны и ночью */
+html.wp body.k-night .k-cams { display: grid; }
+
+/* надпись камеры внизу кадра видна целиком: кадр прижат к низу, обрезается только верх */
+.k-cam video, .k-cam canvas { object-position: 50% 100%; }

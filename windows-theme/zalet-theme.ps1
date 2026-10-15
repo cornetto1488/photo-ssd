@@ -211,7 +211,7 @@ if ($Mode -eq 'apply') {
   $cls = 'Software\Classes\CLSID'
   $nav = [ordered]@{
     '{f874310e-b6b7-47dc-bc84-b9e6b38f5903}' = 'zalet-home'             # Главная
-    '{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}' = 'folder-pictures'   # Галерея
+    '{e88865ea-0e1c-4e20-9aa6-edcd0212c87c}' = 'gallery'   # Галерея
     '{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}' = 'folder-desktop'; '{754AC886-DF64-4CBA-86B5-F7FBF4FBCEF5}' = 'folder-desktop'
     '{d3162b92-9365-467a-956b-92703aca08af}' = 'folder-docs';    '{A8CDFF1C-4878-43be-B5FD-F8091C1C60D0}' = 'folder-docs'
     '{088e3905-0323-4b02-9826-5d99428e115f}' = 'folder-downloads'; '{374DE290-123F-4565-9164-39C4925E467B}' = 'folder-downloads'

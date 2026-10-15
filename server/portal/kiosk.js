@@ -212,11 +212,17 @@ function kioskOpenFolder(path, btn) {
 }
 function kioskWpInit() {
   const W = window.ZH_WP; if (!W) return;
+  // страница обоев не должна прокручиваться (клик по кнопке или фокус могли сдвинуть её вверх)
+  const kioskUnscroll = () => { if (window.scrollY || window.scrollX) window.scrollTo(0, 0); document.querySelectorAll("html, body, #app, main, #page-kiosk, .kiosk, .k-drift").forEach((e) => { if (e.scrollTop || e.scrollLeft) { e.scrollTop = 0; e.scrollLeft = 0; } }); };
+  window.addEventListener("scroll", kioskUnscroll, true);
+  setInterval(kioskUnscroll, 5000);
   const root = $("#kiosk");
   // ячейка значка Windows в CSS-пикселях (учитываем масштаб страницы), зона начинается в левом верхнем углу экрана
   const dpr = window.devicePixelRatio || 1, cw = W.iw / dpr, ch = W.ih / dpr, pad = 0;
   const zw = W.orange ? Math.round(W.cols * cw + pad) : 0, zh = Math.round(W.slots * ch - ch * 0.07);
-  const sbPx = Math.max(screen.height - screen.availHeight, 48) / dpr + 6; // панель задач Windows не должна закрывать низ
+  // панель задач Windows не должна закрывать низ; странные значения (0, почти весь экран) отбрасываем
+  const tb = screen.height - screen.availHeight;
+  const sbPx = (tb > 0 && tb <= 160 ? tb : 48) / dpr + 6;
   document.documentElement.style.setProperty("--wpsb", Math.round(sbPx) + "px");
   document.documentElement.style.setProperty("--wpz", zw + "px");
   document.documentElement.style.setProperty("--wpzh", zh + "px");
@@ -343,7 +349,8 @@ async function kioskCams() {
   const box = $("#kCams"); if (!box) return;
   const hevc = (() => { try { return new URLSearchParams(location.search).get("snap") !== "1" && !!document.createElement("video").canPlayType('video/mp4; codecs="hvc1.1.6.L153.B0"'); } catch (e) { return false; } })();
   const snapMode = !hevc && typeof Worker !== "undefined" && !!window.HevcSnap; // у обоев Wallpaper Engine нет видеодекодеров: рисуем ключевые кадры
-  if (kNight() || window.ZH_NOCAMS || (!hevc && !snapMode)) { box.classList.add("hidden"); return; }
+  const wpMode = document.documentElement.classList.contains("wp"); // на обоях камеры работают и ночью
+  if ((kNight() && !wpMode) || window.ZH_NOCAMS || (!hevc && !snapMode)) { box.classList.add("hidden"); return; }
   box.classList.remove("hidden");
   if (typeof cams === "undefined") return;
   if (!cams.loaded) await camsLoadConfig();
