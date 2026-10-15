@@ -23,7 +23,7 @@ function kioskBuild() {
         <div class="k-vpn hidden" id="kVpn"></div>
         <div class="k-tiles" id="kTiles"></div>
       </div>
-      <div class="k-mid"><div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div><div class="k-side"><div class="k-wcard" id="kWCard"></div><div class="k-music" id="kMusic"></div></div></div>
+      <div class="k-mid"><div class="k-map"><canvas id="kMap"></canvas><div class="k-maplabel" id="kMapLabel"></div></div><div class="k-side"><div class="k-wcard" id="kWCard"></div><div class="k-ac" id="kAc"></div><div class="k-music" id="kMusic"></div></div></div>
       <div class="k-cams" id="kCams"></div>
       <div class="k-ticker" id="kTicker"></div>
     </div>
@@ -125,6 +125,12 @@ function kioskVpnSheet() {
   });
 }
 
+function kioskAc() {
+  const el = $("#kAc"); if (!el || typeof acMount !== "function") return;
+  acMount(el, true); acRefresh();
+  kk.timers.push(setInterval(() => { if (!acx.busy) acRefresh(); }, 20000));
+}
+
 async function kioskTiles() {
   const safe = (p) => p.catch(() => null);
   const [lights, vac, net] = await Promise.all([safe(api("/api/home/stats/lights?days=1")), safe(api("/api/home/dreame")), safe(api("/api/home/stats/net?hours=24"))]);
@@ -198,9 +204,10 @@ const K_ICO = {
 };
 const kIcoFor = (n, p) => { const s = (n + " " + p).toLowerCase(); return /\\\\|хранил|диск|ssd|nas/.test(s) && !/фото|photo/.test(s) ? K_ICO.drive : /фото|photo|image|картин/.test(s) ? K_ICO.image : /загруз|download/.test(s) ? K_ICO.down : /проект|code|dev|git/.test(s) ? K_ICO.code : K_ICO.folder; };
 const kB64u = (s) => btoa(unescape(encodeURIComponent(s))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-function kioskOpenFolder(path) {
-  // открывает папку в проводнике через зарегистрированный протокол zaletopen: (см. «Установить кнопки папок.cmd»)
-  const a = document.createElement("a"); a.href = "zaletopen://open/?p=" + kB64u(path); document.body.appendChild(a); a.click(); a.remove();
+function kioskOpenFolder(path, btn) {
+  // обои (встроенный браузер) не умеют открывать ссылки zaletopen:, поэтому говорим с маленьким помощником на этом же ПК (127.0.0.1:18765)
+  const flash = (t) => { if (!btn) return; const s = btn.querySelector("span"); if (!s) return; const old = s.dataset.t || (s.dataset.t = s.textContent); s.textContent = t; setTimeout(() => { s.textContent = old; }, 2200); };
+  fetch("http://127.0.0.1:18765/open?p=" + kB64u(path), { mode: "no-cors", cache: "no-store" }).catch(() => flash("нет помощника"));
 }
 function kioskWpInit() {
   const W = window.ZH_WP; if (!W) return;
@@ -225,7 +232,7 @@ function kioskWpInit() {
     q.classList.remove("hidden");
     q.innerHTML = '<div class="k-lab">БЫСТРЫЙ ДОСТУП</div><div class="k-quick-row">' + W.folders.map((f, i) =>
       '<button class="k-q' + (i === 0 ? " main" : "") + '" data-i="' + i + '" title="' + kEsc(f.p) + '"><i>' + kIcoFor(f.n, f.p) + "</i><span>" + kEsc(f.n) + "</span></button>").join("") + "</div>";
-    $$(".k-q", q).forEach((b) => b.onclick = () => { const f = W.folders[Number(b.dataset.i)]; if (f) kioskOpenFolder(f.p); });
+    $$(".k-q", q).forEach((b) => b.onclick = () => { const f = W.folders[Number(b.dataset.i)]; if (f) kioskOpenFolder(f.p, b); });
   }
 }
 
@@ -382,6 +389,7 @@ function kioskStart() {
   [2500, 8000, 20000].forEach((ms) => setTimeout(() => { if (kk.on) kioskWeather(); }, ms)); // погода подгружается чуть позже
   kk.timers.push(setInterval(kioskClock, 1000));
   kioskTiles(); kk.timers.push(setInterval(kioskTiles, 30000));
+  kioskAc();
   kioskVpn(); kk.timers.push(setInterval(() => { if (!kk.vpnBusy && !$("#kVpnSheet")) kioskVpn(); }, 60000));
   kioskLightBind(); kioskDevices(false); kk.timers.push(setInterval(() => { if (!kk.busy) kioskDevices(false); }, 45000));
   kk.timers.push(setInterval(kioskWeather, 60000));

@@ -537,3 +537,55 @@ html.wp .k-vpnbtn { background: var(--wp-s1); border-color: var(--wp-line); }
 .k-node:hover { border-color: rgba(255,90,31,.55); } .k-node:disabled { opacity: .55; cursor: default; }
 .k-node.on { border-color: rgba(255,90,31,.75); background: #110c09; } .k-node.on small { color: #ff9a66; }
 .k-node.busy { border-color: #ff5a1f; opacity: 1 !important; }
+
+
+/* ===== кондиционер ===== */
+.ac { display: flex; flex-direction: column; gap: 14px; padding: clamp(14px, 1.5vw, 26px); border-radius: 26px; border: 1px solid var(--wp-line, rgba(255,255,255,.09)); background: var(--wp-s1, rgba(255,255,255,.04)); min-width: 0; box-sizing: border-box; }
+.ac-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ac-ttl { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ac-ttl b { font-size: clamp(16px, 1.5vw, 26px); color: #f6f3ee; }
+.ac-ttl small { color: #7f7f8a; font-size: clamp(11px, 1vw, 15px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ac-pwr { width: clamp(44px, 3.4vw, 64px); height: clamp(44px, 3.4vw, 64px); flex: none; border-radius: 50%; border: 1px solid var(--wp-line, rgba(255,255,255,.12)); background: var(--wp-s2, rgba(255,255,255,.06)); color: #9a9aa5; cursor: pointer; display: grid; place-items: center; transition: .15s; }
+.ac-pwr svg { width: 55%; height: 55%; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ac.on .ac-pwr { background: var(--wp-or, #ff5a1f); color: #160802; border-color: transparent; box-shadow: 0 0 22px rgba(255,90,31,.35); }
+.ac-pwr:active, .ac-step:active, .ac-chip:active { transform: scale(.94); }
+.ac-pwr:disabled, .ac-step:disabled, .ac-chip:disabled { opacity: .4; cursor: default; }
+.ac-temp { display: flex; align-items: center; justify-content: center; gap: clamp(14px, 2vw, 34px); }
+.ac-set { display: flex; flex-direction: column; align-items: center; min-width: 5.5ch; }
+.ac-set b { font-family: var(--display); font-weight: 800; font-size: clamp(46px, min(4.6vw, 8vh), 100px); line-height: 1; color: #f6f3ee; letter-spacing: -.03em; }
+.ac.off .ac-set b { color: #6f6f7a; }
+.ac-set small { color: #7f7f8a; font-size: clamp(11px, 1vw, 15px); }
+.ac-step { width: clamp(42px, 3.4vw, 62px); height: clamp(42px, 3.4vw, 62px); border-radius: 50%; border: 1px solid var(--wp-line, rgba(255,255,255,.12)); background: var(--wp-s2, rgba(255,255,255,.06)); color: #ebe7e1; font-size: clamp(22px, 2vw, 34px); line-height: 1; cursor: pointer; transition: .15s; }
+.ac-step:hover:not(:disabled), .ac-chip:hover:not(:disabled) { border-color: rgba(255,90,31,.55); }
+.ac-row { display: flex; flex-direction: column; gap: 7px; }
+.ac-chips { display: flex; flex-wrap: wrap; gap: 7px; }
+.ac-chip { display: inline-flex; align-items: center; gap: 7px; padding: 8px 13px; border-radius: 999px; border: 1px solid var(--wp-line, rgba(255,255,255,.1)); background: var(--wp-s2, rgba(255,255,255,.05)); color: #d8d4cd; font-size: clamp(12px, 1.05vw, 16px); font-weight: 600; cursor: pointer; transition: .15s; }
+.ac-chip i { font-style: normal; font-size: 1.1em; opacity: .9; }
+.ac-chip.sm { padding: 8px 16px; }
+.ac-chip.on { background: #110c09; border-color: rgba(255,90,31,.8); color: #ff9a66; box-shadow: 0 0 0 1px rgba(255,90,31,.12); }
+.ac-c { gap: 10px; padding: clamp(12px, 1.2vw, 20px); }
+.ac-c .ac-set b { font-size: clamp(38px, min(3.6vw, 6.2vh), 80px); }
+.ac-c .ac-chip { padding: 6px 11px; }
+.ac-c .ac-chip span { display: none; }
+.ac-c .ac-chip i { font-size: 1.25em; }
+.ac-c .ac-ttl small { display: none; }
+.ac-empty { text-align: left; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+#acPage { max-width: 560px; }
+
+/* киоск: боковая колонка (карточки) видна и в обычном киоске, но без погоды и музыки */
+.k-mid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: clamp(12px, 1.4vw, 24px); min-height: 0; }
+.k-side { display: flex; flex-direction: column; gap: clamp(12px, 1.4vw, 24px); min-height: 0; min-width: 0; justify-content: center; }
+html:not(.wp) .k-wcard, html:not(.wp) .k-music { display: none; }
+.k-ac.hidden { display: none; }
+html.wp .k-wcard { flex: 0 0 auto; }
+html.wp .k-wcard .wc-top b { font-size: clamp(44px, min(4.6vw, 8vh), 100px); }
+html.wp .k-wcard .wc-desc { font-size: clamp(14px, min(1.4vw, 2.4vh), 24px); }
+html.wp .k-ac { flex: 1 1 auto; min-height: 0; display: flex; }
+html.wp .k-ac .ac { flex: 1; justify-content: space-between; }
+
+/* подключения */
+.acc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 18px; margin-bottom: 10px; }
+.acc-form { display: flex; flex-direction: column; gap: 10px; }
+.acc-h { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.acc-ok { color: var(--live, #3be08c); font-size: 13px; } .acc-no { color: var(--muted, #8c8c96); font-size: 13px; }
+.acc-act { display: flex; align-items: center; gap: 12px; }

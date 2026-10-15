@@ -3,13 +3,16 @@
 $ErrorActionPreference = 'Stop'
 $dir = Join-Path $env:LOCALAPPDATA 'ZALET'
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
-Copy-Item -Path (Join-Path $PSScriptRoot 'open.ps1'), (Join-Path $PSScriptRoot 'open.vbs') -Destination $dir -Force
+Copy-Item -Path (Join-Path $PSScriptRoot 'open.ps1'), (Join-Path $PSScriptRoot 'open.vbs'), (Join-Path $PSScriptRoot 'listener.ps1'), (Join-Path $PSScriptRoot 'listener.vbs') -Destination $dir -Force
 $k = 'HKCU:\Software\Classes\zaletopen'
 New-Item -Force -Path $k | Out-Null
 Set-ItemProperty -Path $k -Name '(Default)' -Value 'URL:ZALET Open'
 New-ItemProperty -Path $k -Name 'URL Protocol' -Value '' -PropertyType String -Force | Out-Null
 New-Item -Force -Path "$k\shell\open\command" | Out-Null
 Set-ItemProperty -Path "$k\shell\open\command" -Name '(Default)' -Value ('wscript.exe "' + (Join-Path $dir 'open.vbs') + '" "%1"')
+$run = Join-Path $dir 'listener.vbs'
+Set-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'ZaletOpener' -Value ('wscript.exe "' + $run + '"')
+Start-Process -FilePath 'wscript.exe' -ArgumentList ('"' + $run + '"')
 Write-Host ''
 Write-Host 'Готово! Кнопки папок в обоях ZALET теперь открывают проводник.' -ForegroundColor Green
 Write-Host "Помощник лежит в: $dir"

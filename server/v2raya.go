@@ -245,3 +245,43 @@ func (p *homePortal) handleV2rayaConnect(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, 200, map[string]any{"ok": true})
 }
+
+// handleV2rayaLogin сохраняет новые логин и пароль v2rayA (из настроек портала); перед сохранением проверяет вход.
+func (p *homePortal) handleV2rayaLogin(w http.ResponseWriter, r *http.Request) {
+	var q struct{ Username, Password string }
+	json.NewDecoder(io.LimitReader(r.Body, 2048)).Decode(&q)
+	if q.Username == "" || q.Password == "" {
+		fail(w, http.StatusBadRequest, "введите логин и пароль")
+		return
+	}
+	c, _ := v2rayaConfig()
+	if c.URL == "" {
+		c.URL = "http://127.0.0.1:2017"
+	}
+	c.Username, c.Password = q.Username, q.Password
+	st, b, err := do0(&http.Client{Timeout: 15 * time.Second}, c, "/api/login")
+	if err != nil || st != 200 {
+		fail(w, http.StatusUnauthorized, "v2rayA не принимает логин и пароль")
+		return
+	}
+	var rr struct{ Data struct{ Token string } }
+	json.Unmarshal(b, &rr)
+	if rr.Data.Token == "" {
+		fail(w, http.StatusUnauthorized, "v2rayA не принимает логин и пароль")
+		return
+	}
+	out, _ := json.Marshal(c)
+	if err := os.WriteFile(v2rayaCfgPath, out, 0600); err != nil {
+		fail(w, http.StatusInternalServerError, "не удалось сохранить на роутере")
+		return
+	}
+	v2raya.Lock()
+	v2raya.token = rr.Data.Token
+	v2raya.Unlock()
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+func (p *homePortal) handleV2rayaAccount(w http.ResponseWriter, r *http.Request) {
+	c, err := v2rayaConfig()
+	writeJSON(w, 200, map[string]any{"connected": err == nil, "username": c.Username})
+}

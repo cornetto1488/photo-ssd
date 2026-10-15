@@ -138,6 +138,9 @@ type daichiFn struct {
 	Controllable bool  `json:"controllable"`
 	Blocked     bool   `json:"blocked"`
 	Power       bool   `json:"power,omitempty"`
+	Range       []float64 `json:"range,omitempty"`
+	Cmd         string `json:"cmd,omitempty"`
+	Link        *daichiFn `json:"link,omitempty"`
 }
 
 type daichiDev struct {
@@ -148,6 +151,7 @@ type daichiDev struct {
 	On     bool       `json:"on"`
 	Info   string     `json:"info,omitempty"`
 	Model  string     `json:"model,omitempty"`
+	PowerFn int       `json:"powerFn,omitempty"`
 	Fns    []daichiFn `json:"functions"`
 }
 
@@ -178,16 +182,32 @@ func daichiDevices() ([]daichiDev, error) {
 						UI    struct {
 							ControlType string `json:"controlType"`
 							Units       *string
+							Ranges      []struct{ Range []float64 } `json:"rangeIconsInfo"`
 						} `json:"uiInfo"`
 						State struct {
 							Value        any
 							IsOn         bool
 							Blocked      bool
 							Controllable bool
+							ValueRange   []float64 `json:"valueRange"`
 						}
 						Meta struct {
 							IsPowerOnFunction bool `json:"isPowerOnFunction"`
+							Ble               struct {
+								OnCmd *string `json:"bleOnCommand"`
+							} `json:"bleTagInfo"`
 						} `json:"metaData"`
+						Linked *struct {
+							ID    int
+							Title *string
+							State struct {
+								IsOn         bool
+								Controllable bool
+							}
+							Meta struct {
+								IsPowerOnFunction bool `json:"isPowerOnFunction"`
+							} `json:"metaData"`
+						} `json:"linkedFunction"`
 					}
 				}
 			}
@@ -203,6 +223,24 @@ func daichiDevices() ([]daichiDev, error) {
 					}
 					if f.UI.Units != nil {
 						fn.Units = *f.UI.Units
+					}
+					if len(f.State.ValueRange) == 2 {
+						fn.Range = f.State.ValueRange
+					} else if f.UI.ControlType == "LINEAR_SLIDER" && len(f.UI.Ranges) > 0 {
+						fn.Range = []float64{1, float64(len(f.UI.Ranges))}
+					}
+					if f.Meta.Ble.OnCmd != nil {
+						fn.Cmd = *f.Meta.Ble.OnCmd
+					}
+					if l := f.Linked; l != nil {
+						lk := &daichiFn{ID: l.ID, On: l.State.IsOn, Controllable: l.State.Controllable, Power: l.Meta.IsPowerOnFunction}
+						if l.Title != nil {
+							lk.Title = *l.Title
+						}
+						fn.Link = lk
+						if lk.Power {
+							dev.PowerFn = l.ID
+						}
 					}
 					dev.Fns = append(dev.Fns, fn)
 				}
@@ -269,4 +307,67 @@ func (p *homePortal) handleDaichiCtrl(w http.ResponseWriter, r *http.Request) {
 	daichi.cache = nil
 	daichi.Unlock()
 	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// handleDaichiLogin сохраняет логин и пароль Daichi (из настроек портала); перед сохранением проверяет вход.
+func (p *homePortal) handleDaichiLogin(w http.ResponseWriter, r *http.Request) {
+	var q struct{ Email, Password string }
+	json.NewDecoder(io.LimitReader(r.Body, 2048)).Decode(&q)
+	if q.Email == "" || q.Password == "" {
+		fail(w, http.StatusBadRequest, "введите email и пароль")
+		return
+	}
+	j, _ := json.Marshal(map[string]string{"grant_type": "password", "email": q.Email, "password": q.Password, "clientId": daichiClient})
+	req, _ := http.NewRequest("POST", daichiBase+"token", bytes.NewReader(j))
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
+	if err != nil {
+		fail(w, http.StatusBadGateway, "облако Daichi недоступно")
+		return
+	}
+	defer resp.Body.Close()
+	d, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var rr struct {
+		Done    bool
+		Message string
+		Data    struct {
+			Access string `json:"access_token"`
+		}
+	}
+	json.Unmarshal(d, &rr)
+	if !rr.Done || rr.Data.Access == "" {
+		msg := "Daichi не принял логин и пароль"
+		if rr.Message != "" {
+			msg = "Daichi: " + rr.Message
+		}
+		fail(w, http.StatusUnauthorized, msg)
+		return
+	}
+	b, _ := json.Marshal(map[string]string{"email": q.Email, "password": q.Password})
+	if err := os.WriteFile(daichiCfgPath, b, 0600); err != nil {
+		fail(w, http.StatusInternalServerError, "не удалось сохранить на роутере")
+		return
+	}
+	daichi.Lock()
+	daichi.token, daichi.at, daichi.cache = rr.Data.Access, time.Now(), nil
+	daichi.Unlock()
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+func (p *homePortal) handleDaichiLogout(w http.ResponseWriter, r *http.Request) {
+	os.Remove(daichiCfgPath)
+	daichi.Lock()
+	daichi.token, daichi.cache = "", nil
+	daichi.Unlock()
+	writeJSON(w, 200, map[string]any{"ok": true})
+}
+
+// handleDaichiAccount: есть ли сохранённый аккаунт (сам пароль наружу не отдаётся)
+func (p *homePortal) handleDaichiAccount(w http.ResponseWriter, r *http.Request) {
+	cfg := struct{ Email string }{}
+	if b, err := os.ReadFile(daichiCfgPath); err == nil {
+		json.Unmarshal(b, &cfg)
+	}
+	writeJSON(w, 200, map[string]any{"connected": cfg.Email != "", "email": cfg.Email})
 }
