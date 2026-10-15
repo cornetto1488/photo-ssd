@@ -195,6 +195,12 @@ if ($Mode -eq 'apply') {
     try { Set-FolderIcon $dir.FullName "$ico\folder.ico" } catch { Write-Host "  пропуск: $($dir.FullName)" }
   }
 
+  Write-Host '• Иконки локальных дисков'
+  foreach ($ld in @(Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' -ErrorAction SilentlyContinue)) {
+    $dl = $ld.DeviceID.TrimEnd(':')
+    Set-V "Software\Classes\Applications\Explorer.exe\Drives\$dl\DefaultIcon" '' "$ico\drive.ico,0" ExpandString
+  }
+
   Write-Host '• Иконка сетевого диска «Хранилище»'
   foreach ($md in @(Get-CimInstance Win32_MappedLogicalDisk -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match '\\SSD$' })) {
     $letter = $md.DeviceID.TrimEnd(':')
