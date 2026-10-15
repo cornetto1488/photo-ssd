@@ -32,6 +32,7 @@ if (Test-Path $bakFile) {
   foreach ($p in $j.values.PSObject.Properties) { $bak.values[$p.Name] = $p.Value }
   foreach ($p in $j.files.PSObject.Properties) { $bak.files[$p.Name] = $p.Value }
   $bak.readonlyDirs = @($j.readonlyDirs)
+  if ($j.legacyMerged) { $bak['legacyMerged'] = $true }
 }
 function Save-Bak { $bak | ConvertTo-Json -Depth 6 | Set-Content -Path $bakFile -Encoding UTF8 }
 
@@ -57,9 +58,10 @@ function Set-V([string]$sub, [string]$name, $value, [Microsoft.Win32.RegistryVal
 }
 # Если раньше применялись старые скрипты темы, настоящие исходные значения лежат в их копиях (backup*.json) —
 # берём их, чтобы откат вернул систему к состоянию ДО любых тем ZALET.
+$script:SeedForce = $false
 function Seed([string]$sub, [string]$name, $exists, $kind, $value) {
   $key = "$sub|$name"
-  if ($bak.values.Contains($key)) { return }
+  if ($bak.values.Contains($key) -and -not $script:SeedForce) { return }
   $bak.values[$key] = [ordered]@{ sub = $sub; name = $name; exists = [bool]$exists; kind = $kind; value = $value }
 }
 function SeedDw([string]$sub, [string]$name, $v) { if ($null -eq $v) { Seed $sub $name $false $null $null } else { Seed $sub $name $true 'DWord' $v } }
@@ -147,6 +149,16 @@ $shellIcons = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Ic
 
 if ($Mode -eq 'apply') {
   if (-not (Test-Path $bakFile)) { Seed-Legacy; Save-Bak }
+  elseif (-not $bak.Contains('legacyMerged') -or -not $bak.legacyMerged) {
+    # тема уже применялась без учёта старых скриптов — подставляем настоящие исходные значения из их копий
+    $script:SeedForce = $true; Seed-Legacy; $script:SeedForce = $false
+    foreach ($ini in @($bak.files.Keys)) {
+      if (Test-Path -LiteralPath "$ini.zalet-bak") { $bak.files[$ini] = [ordered]@{ existed = $true; copy = "$ini.zalet-bak" } }
+      elseif (Test-Path -LiteralPath "$ini.zalet-new") { $bak.files[$ini] = [ordered]@{ existed = $false; copy = $null }; $dirOf = Split-Path $ini -Parent; if ($bak.readonlyDirs -notcontains $dirOf) { $bak.readonlyDirs += $dirOf } }
+    }
+  }
+  $bak['legacyMerged'] = $true
+  Save-Bak
   # файлы иконок и курсоров — в постоянную папку профиля
   $ico = Join-Path $dst 'icons'; $cur = Join-Path $dst 'cursors'
   New-Item -ItemType Directory -Force -Path $ico, $cur | Out-Null

@@ -95,7 +95,7 @@ func (p *homePortal) handleUSBKit(w http.ResponseWriter, r *http.Request) {
 			dst = ".maker/make-flash.ps1"
 		case "Сделать флешку ZALET.cmd":
 			dst = name
-		case "start.ps1", "stop.ps1", "zalet.ico", "drive.ico":
+		case "start.ps1", "stop.ps1", "drive.ico":
 			dst = "флешка/.zalet/" + name
 		}
 		add(dst, mode, strings.NewReader(string(b)))
