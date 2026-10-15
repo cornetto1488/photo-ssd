@@ -200,6 +200,13 @@ if ($Mode -eq 'apply') {
     $letter = $md.DeviceID.TrimEnd(':')
     Set-V "Software\Classes\Applications\Explorer.exe\Drives\$letter\DefaultIcon" '' "$ico\drive-net.ico,0" ExpandString
   }
+  # для сетевых дисков Проводник берёт значок из MountPoints2\##сервер#папка\DefaultIcon
+  $mp = 'Software\Microsoft\Windows\CurrentVersion\Explorer\MountPoints2'
+  $mpKey = $HK.OpenSubKey($mp)
+  if ($mpKey) {
+    foreach ($nm in $mpKey.GetSubKeyNames() | Where-Object { $_ -like '##*#ssd' }) { Set-V "$mp\$nm\DefaultIcon" '' "$ico\drive-net.ico,0" ExpandString }
+    $mpKey.Close()
+  }
 
   if (-not $NoCursors -and (Test-Path "$cur\arrow.cur")) {
     Write-Host '• Курсоры ZALET'
