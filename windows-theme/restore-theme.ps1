@@ -14,7 +14,14 @@ if (Test-Path $bakFile) {
   SetOrDel $dwm 'AccentColor' $b.DwmAccentColor; SetOrDel $dwm 'ColorizationColor' $b.DwmColorizationColor; SetOrDel $dwm 'ColorizationAfterglow' $b.DwmAfterglow
   SetOrDel $acc 'AccentColorMenu' $b.AccentColorMenu
 }
-Remove-Item -Path "$bin\DefaultIcon" -Recurse -Force
+$bak2 = Join-Path $dst 'backup2.json'
+if (Test-Path $bak2) {
+  $c = Get-Content $bak2 -Raw | ConvertFrom-Json
+  SetOrDel 'HKCU:\Control Panel\Desktop' 'AutoColorization' $c.AutoColorization
+  SetOrDel $acc 'StartColorMenu' $c.StartColorMenu; SetOrDel $acc 'AccentColorMenu' $c.AccentColorMenu
+  if ($c.AccentPalette) { Set-ItemProperty -Path $acc -Name AccentPalette -Value ([Convert]::FromBase64String($c.AccentPalette)) -Type Binary }
+  SetOrDel $pers 'ColorPrevalence' $c.ColorPrevalence; SetOrDel $dwm 'AccentColor' $c.DwmAccent; SetOrDel $dwm 'ColorizationColor' $c.DwmColorization
+}Remove-Item -Path "$bin\DefaultIcon" -Recurse -Force
 Remove-Item -Path "$pc\DefaultIcon" -Recurse -Force
 $cmd = "Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons' -Name '3' -ErrorAction SilentlyContinue; Remove-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons' -Name '4' -ErrorAction SilentlyContinue"
 $k = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\Shell Icons' -Name '3' -ErrorAction SilentlyContinue
