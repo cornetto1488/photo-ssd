@@ -27,6 +27,16 @@ LINUX (Ubuntu, Astra, Mint, Debian, Fedora…)
   Отключиться:  bash zalet-linux.sh stop   (там же можно удалить Tailscale)
 
 
+ZALET SETUP — ПОСТАВИТЬ ВСЁ НА СВОЙ НОВЫЙ КОМПЬЮТЕР
+  Для своих компьютеров (не для чужих — там хватит «ZALET HOME»):
+  папка «ZALET Setup» → ZALET-Setup.exe (Windows) или zalet (Linux: ./zalet).
+  Откроется окно настройки: сетевой диск «Хранилище», обои с панелью дома,
+  кнопки папок, агент ПК, тема ZALET (чёрный «Пуск», оранжевое выделение,
+  иконки, курсоры), ярлык панели, проверка Tailscale. Кнопка «Установить всё».
+  Адрес роутера и ключ уже внутри — эту папку не пересылайте чужим.
+  Без окна (Linux-сервер): ./zalet -cli
+
+
 КЛЮЧ ПОДКЛЮЧЕНИЯ (один раз)
   Ключ лежит в скрытой папке .zalet, в файле key.txt — одна строка.
 
@@ -57,3 +67,5 @@ LINUX (Ubuntu, Astra, Mint, Debian, Fedora…)
   .zalet\key.txt        — ключ подключения
   .zalet\tailscale-setup-amd64.msi — официальный установщик Tailscale для Windows
   .zalet\tailscale_amd64.tgz       — официальный Tailscale для Linux
+  ZALET Setup\          — настройка своего нового компьютера (Windows и Linux)
+  ZALET Agent\          — агент ПК отдельно (компьютер виден в панели)
