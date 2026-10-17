@@ -694,7 +694,9 @@ html.wp .k-cam { border-radius: 10px; }
 /* ---------- План дома ---------- */
 .plan-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 .plan-board { padding: 10px; }
-#planCanvas { display: block; width: 100%; height: min(78vh, 900px); touch-action: none; cursor: grab; }
+.plan-stage { position: relative; width: 100%; height: min(80vh, 920px); }
+.plan-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#planOver { touch-action: none; cursor: grab; }
 .plan-hint { margin-top: 6px; }
 .plan-side { display: flex; flex-direction: column; gap: 12px; }
 .plan-side .card { padding: 14px; }
@@ -709,5 +711,5 @@ html.wp .k-cam { border-radius: 10px; }
 .plan-pname { display: block; margin: 8px 0 2px; }
 .plan-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 .plan-3d { margin-top: 16px; padding: 12px; }
-#plan3d { display: block; width: 100%; height: 460px; }
-@media (max-width: 900px) { .plan-grid { grid-template-columns: 1fr; } #planCanvas { height: 70vh; } }
+#plan3d { display: block; width: 100%; height: min(70vh, 640px); }
+@media (max-width: 900px) { .plan-grid { grid-template-columns: 1fr; } .plan-stage { height: 72vh; } }
