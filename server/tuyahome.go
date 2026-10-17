@@ -33,19 +33,35 @@ type tuyaLocal struct {
 	ipName map[string]string           // ip -> имя устройства Tuya (для списка клиентов)
 	at     time.Time
 	busy   bool
+	io       sync.Mutex             // одно сетевое соединение с устройствами за раз
+	states   map[string]localState  // devId -> последний ответ по сети
+	specFail map[string]time.Time   // productId -> когда облако не отдало схему
 }
 
 func newTuyaLocal(p *homePortal) *tuyaLocal {
-	return &tuyaLocal{p: p, devs: map[string]*localDev{}, specs: map[string]map[string]dpSpec{}, ipName: map[string]string{}}
+	return &tuyaLocal{p: p, devs: map[string]*localDev{}, specs: map[string]map[string]dpSpec{}, ipName: map[string]string{},
+		states: map[string]localState{}, specFail: map[string]time.Time{}}
 }
 
 func (tl *tuyaLocal) cloudList() ([]cloudDev, error) {
 	out, err := tl.p.tuya.call("GET", "/v1.0/iot-01/associated-users/devices?size=100", "")
 	if err != nil {
+		// облако недоступно (кончилась квота, нет интернета) — берём список и ключи из снимка
+		if snap := tl.p.loadSnap(); snap != nil && len(snap.List) > 0 {
+			log.Printf("tuya local: облако: %v — список из снимка", err)
+			return parseCloudList(snap.List), nil
+		}
 		return nil, err
 	}
 	res, _ := out["result"].(map[string]any)
 	list, _ := res["devices"].([]any)
+	if len(list) > 0 {
+		tl.p.saveSnap(func(s *tuyaSnap) { s.List = list })
+	}
+	return parseCloudList(list), nil
+}
+
+func parseCloudList(list []any) []cloudDev {
 	var devs []cloudDev
 	for _, d := range list {
 		m, _ := d.(map[string]any)
@@ -61,7 +77,7 @@ func (tl *tuyaLocal) cloudList() ([]cloudDev, error) {
 		}
 		devs = append(devs, cd)
 	}
-	return devs, nil
+	return devs
 }
 
 // spec берёт из облака модель продукта: номера DP и диапазоны.
@@ -71,8 +87,12 @@ func (tl *tuyaLocal) spec(devID, productID string) map[string]dpSpec {
 		tl.mu.Unlock()
 		return s
 	}
+	failAt, failed := tl.specFail[productID]
 	tl.mu.Unlock()
 	s := map[string]dpSpec{}
+	if failed && time.Since(failAt) < 10*time.Minute {
+		return s
+	}
 	if out, err := tl.p.tuya.call("GET", "/v2.0/cloud/thing/"+devID+"/model", ""); err == nil {
 		res, _ := out["result"].(map[string]any)
 		var model struct {
@@ -96,8 +116,27 @@ func (tl *tuyaLocal) spec(devID, productID string) map[string]dpSpec {
 			}
 		}
 	}
+	if len(s) == 0 { // не кэшируем пустую схему — иначе команды «неизвестны» до перезапуска
+		if snap := tl.p.loadSnap(); snap != nil && len(snap.Specs[productID]) > 0 {
+			s = snap.Specs[productID]
+		} else {
+			tl.mu.Lock()
+			tl.specFail[productID] = time.Now()
+			tl.mu.Unlock()
+			return s
+		}
+	} else {
+		saved := s
+		tl.p.saveSnap(func(sn *tuyaSnap) {
+			if sn.Specs == nil {
+				sn.Specs = map[string]map[string]dpSpec{}
+			}
+			sn.Specs[productID] = saved
+		})
+	}
 	tl.mu.Lock()
 	tl.specs[productID] = s
+	delete(tl.specFail, productID)
 	tl.mu.Unlock()
 	return s
 }
@@ -196,9 +235,17 @@ func (tl *tuyaLocal) discover() {
 		}
 	}
 	tl.mu.Lock()
+	for id, d := range tl.devs { // не нашли сейчас (выключен выключателем) — оставляем прежний адрес
+		if found[id] == nil {
+			found[id] = d
+		}
+	}
 	tl.devs = found
 	tl.ipName = names
 	tl.mu.Unlock()
+	if len(found) > 0 {
+		tl.saveLocal(found)
+	}
 	log.Printf("tuya local: найдено %d из %d", len(found), len(devs))
 }
 
@@ -251,6 +298,8 @@ func (tl *tuyaLocal) set(devID, productID string, cmds []deviceState) error {
 	if len(dps) == 0 {
 		return fmt.Errorf("неизвестные команды")
 	}
+	tl.io.Lock()
+	defer tl.io.Unlock()
 	return localSet(d, dps)
 }
 

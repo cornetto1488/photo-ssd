@@ -190,6 +190,8 @@ func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile, tokenFile str
 	s.sessionCheck = p.pin.sessionOK
 	if p.tuya != nil {
 		p.local = newTuyaLocal(p)
+		p.local.restore()
+		go p.local.pollLoop()
 		go func() {
 			for {
 				p.local.discover()
@@ -256,6 +258,8 @@ func (p *homePortal) loadRooms() {
 	}
 	p.rooms = m
 	p.roomsAt = time.Now()
+	home := p.homeID
+	p.saveSnap(func(s *tuyaSnap) { s.Rooms = m; s.HomeID = home })
 }
 
 func toFloat(v any) float64 {
@@ -272,6 +276,8 @@ func toFloat(v any) float64 {
 	return 0
 }
 
+var snapListAt time.Time // под devMu
+
 func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 	if p.tuya == nil {
 		return nil, errors.New("облако Tuya не настроено")
@@ -282,11 +288,33 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 		return p.devs, nil
 	}
 	out, err := p.tuya.call("GET", "/v1.0/iot-01/associated-users/devices?size=100", "")
-	if err != nil {
-		return p.devs, err
+	cloudOK := err == nil
+	var list []any
+	if cloudOK {
+		res, _ := out["result"].(map[string]any)
+		list, _ = res["devices"].([]any)
+		if len(list) > 0 && time.Since(snapListAt) > 10*time.Minute { // снимок на диск — не чаще раза в 10 минут
+			snapListAt = time.Now()
+			p.saveSnap(func(s *tuyaSnap) { s.List = list })
+		}
+	} else {
+		// облако не отвечает (квота, интернет) — список из снимка, состояние по домашней сети
+		snap := p.loadSnap()
+		if snap == nil || len(snap.List) == 0 {
+			return p.devs, err
+		}
+		list = snap.List
+		if p.homeID == "" {
+			p.homeID = snap.HomeID
+		}
+		if len(p.rooms) == 0 && snap.Rooms != nil {
+			p.rooms = snap.Rooms
+		}
 	}
-	res, _ := out["result"].(map[string]any)
-	list, _ := res["devices"].([]any)
+	prev := map[string]homeDevice{}
+	for _, d := range p.devs {
+		prev[d.ID] = d
+	}
 	if p.homeID == "" {
 		for _, d := range list {
 			dm, _ := d.(map[string]any)
@@ -296,7 +324,9 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 			}
 		}
 	}
-	p.loadRooms()
+	if cloudOK {
+		p.loadRooms()
+	}
 
 	iconHost := "https://images.tuyaeu.com/"
 	if strings.Contains(p.tuya.host, "tuyaus") {
@@ -316,6 +346,13 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 			hd.Local = p.local.known(id)
 		}
 		hd.Online, _ = dm["online"].(bool)
+		if p.local != nil && p.local.fresh(id) {
+			hd.Online = true
+		} else if !cloudOK {
+			if pd, ok := prev[id]; ok {
+				hd.Online = pd.Online
+			}
+		}
 		if ic, _ := dm["icon"].(string); ic != "" {
 			if strings.HasPrefix(ic, "http") {
 				hd.Icon = ic
@@ -337,7 +374,16 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			devs[i].Status = p.state(devs[i].ID)
+			// сначала — что устройство само ответило по сети (без облака и квот), иначе облако, иначе прежнее
+			if p.local != nil {
+				devs[i].Status = p.local.codes(devs[i].ID, devs[i].ProductID)
+			}
+			if len(devs[i].Status) == 0 && cloudOK {
+				devs[i].Status = p.state(devs[i].ID)
+			}
+			if len(devs[i].Status) == 0 {
+				devs[i].Status = prev[devs[i].ID].Status
+			}
 		}(i)
 	}
 	wg.Wait()
