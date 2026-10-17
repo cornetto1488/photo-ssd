@@ -1173,6 +1173,7 @@ func (p *homePortal) handler() http.Handler {
 		"/api/home/dreame/mapraw":  p.handleDreameMapRaw,
 		"/api/home/dreame/map":     p.handleDreameMap,
 		"/api/home/dreame/rooms":   p.handleDreameRooms,
+		"/api/home/plan":           p.handlePlan,
 		"/api/home/setup/download": p.handleSetupDownload,
 		"/api/home/daichi":         p.handleDaichi,
 		"/api/home/daichi/ctrl":    p.handleDaichiCtrl,

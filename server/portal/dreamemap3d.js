@@ -15,6 +15,7 @@ class DreameMap3D {
     this._ro = new ResizeObserver(() => this.resize()); this._ro.observe(canvas);
     this._io = new IntersectionObserver((e) => { this.vis = e[0].isIntersecting; if (this.vis) this.start(); }, { threshold: 0.05 }); this._io.observe(canvas);
     this.resize();
+    (window.zhMaps ||= []).push(this);
   }
   setNames(n) { this.names = n || {}; this._dirty = true; }
   setData(m) {
@@ -99,6 +100,46 @@ class DreameMap3D {
     if (id === 99) return k === 1 ? "#26262b" : "#3b3b42";
     const h = DM_HUES[(id - 1) % DM_HUES.length];
     return k === 1 ? `hsl(${h},30%,20%)` : k === 2 ? `hsl(${h},62%,60%)` : k === 3 ? `hsl(${h},18%,28%)` : `hsl(${h},36%,42%)`;
+  }
+  setPlan(pl) { this.plan = pl; this._dirty = true; }
+  // мебель и устройства из «Плана дома»: объёмные блоки поверх пола, свет — тёплое свечение, если горит
+  _drawPlan(ctx, P, s, sinT, sn, cs, cx, cy) {
+    const pl = this.plan || window.zhPlan; if (!pl || !Array.isArray(pl.items) || !pl.items.length) return;
+    const types = window.PL_TYPES || {}, st = window.zhDevState || {};
+    const rgb = (hex) => { const v = parseInt(String(hex || "#555").slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; };
+    const shade = (c, k) => `rgb(${Math.round(c[0] * k)},${Math.round(c[1] * k)},${Math.round(c[2] * k)})`;
+    const items = pl.items.map((it) => ({ it, ty: types[it.t] || {}, d: (it.x + it.w / 2 - cx) * sn + (it.y + it.h / 2 - cy) * cs })).sort((a, b) => a.d - b.d);
+    const ring = (it, n) => { const pts = [], rx = it.w / 2, ry = it.h / 2, ox = it.x + rx, oy = it.y + ry; for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; pts.push([ox + Math.cos(a) * rx, oy + Math.sin(a) * ry]); } return pts; };
+    const fillPoly = (pts, fill, stroke) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 0.8; ctx.stroke(); } };
+    for (const { it, ty } of items) {
+      const col = rgb(it.c || ty.c);
+      if (ty.dev === "light") { // свет: свечение на полу, если в комнате горит
+        const on = st.rooms && (st.rooms[it.room] || (window.plCanon && st.rooms[window.plCanon(it.room)]));
+        const c = P(it.x + it.w / 2, it.y + it.h / 2, 0), r = s * 22;
+        if (on) { const g = ctx.createRadialGradient(c[0], c[1], 0, c[0], c[1], r); g.addColorStop(0, "rgba(255,190,110,.55)"); g.addColorStop(1, "rgba(255,150,60,0)"); ctx.save(); ctx.scale(1, 1); ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(c[0], c[1], r, r * sinT, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore(); }
+        const b = P(it.x + it.w / 2, it.y + it.h / 2, 12);
+        ctx.beginPath(); ctx.arc(b[0], b[1], Math.max(3, s * 1.4), 0, Math.PI * 2); ctx.fillStyle = on ? "#ffcf8a" : "#55555f"; ctx.fill();
+        if (on) { ctx.strokeStyle = "rgba(255,200,130,.6)"; ctx.lineWidth = 2; ctx.stroke(); }
+        continue;
+      }
+      if (ty.flat) { const z = 5; fillPoly([P(it.x, it.y, z), P(it.x + it.w, it.y, z), P(it.x + it.w, it.y + it.h, z), P(it.x, it.y + it.h, z)], "rgba(127,199,255,.55)", "rgba(170,220,255,.9)"); continue; }
+      const z0 = ty.lift || 0, z1 = z0 + (ty.z || 3);
+      const base = ty.round ? ring(it, 12) : [[it.x, it.y], [it.x + it.w, it.y], [it.x + it.w, it.y + it.h], [it.x, it.y + it.h]];
+      // боковые грани, обращённые к зрителю
+      for (let i = 0; i < base.length; i++) {
+        const a = base[i], b = base[(i + 1) % base.length];
+        const ex = b[0] - a[0], ey = b[1] - a[1], nx = ey, ny = -ex; // внешняя нормаль (обход по часовой)
+        if (nx * sn + ny * cs <= 0.0001) continue;
+        const br = 0.55 + 0.25 * Math.abs(nx * cs - ny * sn) / (Math.hypot(nx, ny) || 1);
+        fillPoly([P(a[0], a[1], z0), P(b[0], b[1], z0), P(b[0], b[1], z1), P(a[0], a[1], z1)], shade(col, br), shade(col, br * 0.9));
+      }
+      let top = shade(col, 1);
+      let edge = shade(col, 1.12);
+      const active = (ty.dev === "ac" && st.ac) || (ty.dev === "pc" && st.pc) || (ty.dev === "router");
+      if (active) edge = ty.dev === "router" ? "#3be08c" : "#ff8a4c";
+      fillPoly(base.map((q) => P(q[0], q[1], z1)), top, edge);
+      if (active && ty.dev !== "router") { const c = P(it.x + it.w / 2, it.y + it.h / 2, z1 + 0.5); ctx.beginPath(); ctx.arc(c[0], c[1], Math.max(2.5, s * 1.1), 0, Math.PI * 2); ctx.fillStyle = "#ff5a1f"; ctx.fill(); }
+    }
   }
   draw(t) {
     const { ctx, W, H, dpr } = this; const m = this.map; if (!m) return;
@@ -207,6 +248,7 @@ class DreameMap3D {
       cc = ctx;
     }
     if (wl) ctx.drawImage(wl, 0, 0, W, H); else paintWalls.call(this, ctx);
+    if (this.opts.furniture !== false) this._drawPlan(ctx, P, s, sinT, sn, cs, cx, cy);
     // пылесос в конце маршрута
     const last = m.paths.length ? m.paths[m.paths.length - 1] : null;
     let rb = m.robot;
@@ -225,7 +267,8 @@ class DreameMap3D {
     if (this.opts.labels) {
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       for (const r of m.rooms) {
-        const name = this.names[r.id] || `Комната ${r.id}`, q = P(r.cx, r.cy, 1.5);
+        const pr = (this.plan || window.zhPlan || {}).rooms || {};
+        const name = pr[r.id] || this.names[r.id] || `Комната ${r.id}`, q = P(r.cx, r.cy, 1.5);
         const fs = Math.max(11, Math.min(15, s * 4.2)); ctx.font = `600 ${fs}px Inter, sans-serif`;
         const label = `${name} · ${r.area} м²`, tw = ctx.measureText(label).width;
         const isSel = this.selected.has(r.id);
