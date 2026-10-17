@@ -5,7 +5,7 @@
 
 // каталог: lw × lh — ширина и глубина модели в клетках (по 5 см), dev — устройство с живым состоянием
 window.PL_TYPES = {
-  bed: { n: "Кровать", lw: 32, lh: 40, i: "🛏" },
+  bed: { n: "Кровать", lw: 28, lh: 38, i: "🛏" },
   sofa: { n: "Диванчик", lw: 34, lh: 14, i: "🛋" },
   desk: { n: "Компьютерный стол", lw: 28, lh: 13, i: "🖥" },
   chair: { n: "Офисное кресло", lw: 12, lh: 12, i: "🪑" },
@@ -62,26 +62,32 @@ function plHash(s) { let h = 2166136261; for (const ch of String(s)) h = Math.im
 
 const PL_MODELS = {
   bed(L) {
-    const { lw, lh, Z, box } = L;
-    box(0.7, 0.7, lw - 0.7, lh - 0.7, 0, Z(8), "#1d1d21");
-    box(0, 0, lw, lh, Z(8), Z(32), "#46464e");
-    box(0, 0, lw, 2.4, 0, Z(108), "#55555e", { f: "#5c5c66" });
-    box(0.8, 2.6, lw - 0.8, lh - 0.8, Z(32), Z(52), "#4a4a53");
-    box(2, 3.2, lw / 2 - 0.8, 9.5, Z(52), Z(63), "#9b9ba3"); box(lw / 2 + 0.8, 3.2, lw - 2, 9.5, Z(52), Z(62), "#8f8f98");
-    box(1.2, 12, lw - 1.2, lh - 1.6, Z(52), Z(57), "#a5a5ad");
-    box(lw - 1, 14, lw + 0.4, lh - 5, Z(26), Z(57), "#9a9aa2");
-    box(5, 17, 17, 25, Z(57), Z(62), "#b7b7be"); box(13, 27, 27, 34, Z(57), Z(61), "#a0a0a8"); box(19, 14, 28, 21, Z(57), Z(60), "#bebec5");
+    const { lw, lh, Z, box, rbox } = L;
+    rbox(0.8, 0.8, lw - 0.8, lh - 0.8, 0, Z(6), "#18181b", 0.6);
+    rbox(0, 1.4, lw, lh, Z(6), Z(32), "#3e3e46", 1.1);
+    box(lw - 0.05, lh * 0.62, lw + 0.2, lh * 0.62 + 1.8, Z(13), Z(23), "#26262c");
+    rbox(0, 0, lw, 2.2, 0, Z(98), "#55555e", 0.9, true);
+    rbox(1, 1.9, lw - 1, 2.5, Z(38), Z(92), "#60606a", 0.6, true);
+    rbox(0.6, 2.6, lw - 0.6, lh - 0.6, Z(32), Z(51), "#4a4a53", 1.5, true);
+    rbox(1.6, 3.3, lw / 2 - 0.5, 9, Z(51), Z(61), "#a4a4ac", 1.8, true);
+    rbox(lw / 2 + 0.5, 3.6, lw - 1.6, 9.2, Z(51), Z(60), "#9a9aa2", 1.8, true);
+    rbox(2.4, 11, lw - 0.8, lh - 4, Z(51), Z(55), "#acacb3", 3, true);
+    rbox(4, 14, 17, 25, Z(55), Z(61), "#bcbcc3", 3.5, true);
+    rbox(11, 23, 25, 32, Z(54), Z(59.5), "#a5a5ad", 3.5, true);
+    rbox(15, 11.5, 25, 18, Z(54), Z(58.5), "#c5c5cb", 2.6, true);
+    rbox(lw - 1.3, 13, lw + 0.6, lh - 7, Z(27), Z(55), "#a0a0a8", 0.6, true);
   },
   sofa(L) {
-    const { lw, lh, Z, box, c } = L;
-    box(0.5, 0.5, lw - 0.5, lh - 0.5, 0, Z(8), "#18181b");
-    box(0, 0, lw, lh, Z(8), Z(40), "#303036");
-    box(0, 0, lw, 3.6, Z(40), Z(85), "#3a3a41");
-    box(0, 3.6, 2.6, lh, Z(40), Z(62), "#3a3a41"); box(lw - 2.6, 3.6, lw, lh, Z(40), Z(62), "#3a3a41");
-    box(2.6, 3.6, lw - 2.6, lh - 0.2, Z(40), Z(50), c("#7a4828"));
-    box(3, lh - 0.7, lw - 4, lh + 0.25, Z(22), Z(50), c("#6b3e22"));
-    box(3.2, 3.8, 9.5, 8.5, Z(50), Z(61), "#8b5a35");
-    box(lw - 13, 6, lw - 6, 11.5, Z(50), Z(58), "rgba(232,232,238,.92)");
+    const { lw, lh, Z, rbox, c } = L;
+    rbox(0.5, 0.5, lw - 0.5, lh - 0.5, 0, Z(8), "#16161a", 0.5);
+    rbox(0, 0, lw, lh, Z(8), Z(40), "#2e2e34", 0.9);
+    rbox(0, 0, lw, 3.8, Z(40), Z(85), "#38383f", 1.2, true);
+    rbox(0, 3, 2.8, lh, Z(40), Z(62), "#38383f", 1.1, true); rbox(lw - 2.8, 3, lw, lh, Z(40), Z(62), "#38383f", 1.1, true);
+    rbox(2.6, 3.6, lw - 2.6, lh - 0.1, Z(40), Z(50), c("#7a4828"), 1.6, true);
+    rbox(3, lh - 0.8, lw - 4, lh + 0.3, Z(20), Z(50), c("#6b3e22"), 0.4);
+    rbox(4, 6, 13, 11, Z(50), Z(54), c("#8a5532"), 2, true);
+    rbox(3.2, 3.8, 9.5, 8.6, Z(50), Z(62), "#8b5a35", 1.8, true);
+    rbox(lw - 13, 6, lw - 6, 11.5, Z(50), Z(58), "rgba(232,232,238,.92)", 1.6, true);
   },
   desk(L) {
     const { lw, lh, Z, box, cyl, halo, st } = L, t1 = Z(72), t2 = Z(76), on = !!st.pc;
@@ -118,23 +124,24 @@ const PL_MODELS = {
     halo(lw / 2, lh, z0 + 0.6, 1.8, "rgba(60,230,140,.95)", 2.5);
   },
   chair(L) {
-    const { lw, lh, Z, box, cyl } = L, c = lw / 2;
-    box(c - 0.5, 1, c + 0.5, lh - 1, Z(4), Z(7), "#e2e2e2"); box(1, 6, lw - 1, 7, Z(4), Z(7), "#e2e2e2");
-    for (const [u, v] of [[c, 1.2], [c, lh - 1.2], [1.2, 6.5], [lw - 1.2, 6.5]]) cyl(u, v, 0.6, 0.6, 0, Z(4), "#2a2a2e", { seg: 8 });
+    const { lw, lh, Z, box, cyl, rbox } = L, c = lw / 2;
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 - Math.PI / 2, u = c + Math.cos(a) * 5, v = 6.5 + Math.sin(a) * 5; box(Math.min(c, u) - 0.35, Math.min(6.5, v) - 0.35, Math.max(c, u) + 0.35, Math.max(6.5, v) + 0.35, Z(4), Z(7), "#e6e6e6"); cyl(u, v, 0.6, 0.6, 0, Z(4), "#2a2a2e", { seg: 8 }); }
     cyl(c, 6.5, 0.55, 0.55, Z(7), Z(44), "#d6d6d6", { seg: 8 });
-    box(1.8, 2.6, lw - 1.8, lh - 0.8, Z(44), Z(52), "#8d7c6b");
-    box(2.2, 1, lw - 2.2, 2.4, Z(56), Z(112), "#7b6d60");
-    box(3.6, 0.8, lw - 3.6, 2.2, Z(116), Z(128), "#5d544b");
+    rbox(1.8, 2.6, lw - 1.8, lh - 0.8, Z(44), Z(52), "#8d7c6b", 1.6, true);
+    rbox(2.2, 0.9, lw - 2.2, 2.4, Z(56), Z(112), "#7b6d60", 1.4, true);
+    rbox(3.6, 0.7, lw - 3.6, 2.2, Z(116), Z(128), "#5d544b", 1, true);
     box(1, 5, 1.8, 9.5, Z(60), Z(63), "#ececec"); box(lw - 1.8, 5, lw - 1, 9.5, Z(60), Z(63), "#ececec");
     box(1.1, 6.8, 1.7, 7.6, Z(52), Z(60), "#ececec"); box(lw - 1.7, 6.8, lw - 1.1, 7.6, Z(52), Z(60), "#ececec");
   },
   gchair(L) {
-    const { lw, lh, Z, box, cyl } = L, c = lw / 2;
-    box(c - 0.5, 1, c + 0.5, lh - 1, Z(4), Z(7), "#1a1a1d"); box(1, 6, lw - 1, 7, Z(4), Z(7), "#1a1a1d");
+    const { lw, lh, Z, box, cyl, rbox } = L, c = lw / 2;
+    for (let i = 0; i < 5; i++) { const a = (i / 5) * Math.PI * 2 - Math.PI / 2, u = c + Math.cos(a) * 5, v = 6.5 + Math.sin(a) * 5; box(Math.min(c, u) - 0.35, Math.min(6.5, v) - 0.35, Math.max(c, u) + 0.35, Math.max(6.5, v) + 0.35, Z(4), Z(7), "#1a1a1d"); }
     cyl(c, 6.5, 0.6, 0.6, Z(7), Z(44), "#2a2a2e", { seg: 8 });
-    box(1.4, 2.6, lw - 1.4, lh - 0.6, Z(44), Z(54), "#1b1b1f", { l: "#9c1c1c", r: "#9c1c1c" });
-    box(1.6, 0.6, lw - 1.6, 3, Z(56), Z(135), "#1b1b1f");
+    rbox(1.4, 2.6, lw - 1.4, lh - 0.6, Z(44), Z(54), "#1b1b1f", 1.6, true);
+    rbox(1.2, 3, 2.6, lh - 1, Z(50), Z(58), "#9c1c1c", 0.6, true); rbox(lw - 2.6, 3, lw - 1.2, lh - 1, Z(50), Z(58), "#9c1c1c", 0.6, true);
+    rbox(1.6, 0.6, lw - 1.6, 3, Z(56), Z(135), "#1b1b1f", 1.4, true);
     box(3, 3, 4.1, 3.14, Z(62), Z(132), "#b81e1e"); box(lw - 4.1, 3, lw - 3, 3.14, Z(62), Z(132), "#b81e1e");
+    rbox(4, 2.6, lw - 4, 3.4, Z(118), Z(128), "#2a2a30", 0.5, true);
     box(1, 5, 1.9, 10, Z(62), Z(65), "#202024"); box(lw - 1.9, 5, lw - 1, 10, Z(62), Z(65), "#202024");
   },
   table(L) {
@@ -148,10 +155,10 @@ const PL_MODELS = {
   },
   beanbag(L) {
     const { lw, lh, Z, box, cyl } = L, c = lw / 2, d = lh / 2;
-    cyl(c, d, c, d, 0, Z(18), "#6f6f77", { seg: 22 });
-    cyl(c, d + 0.8, c - 1.6, d - 1.6, Z(18), Z(31), "#7a7a82", { seg: 22 });
-    cyl(c, d + 1.4, c - 4, d - 4, Z(31), Z(35), "#85858d", { seg: 18 });
-    box(c - 3, d - 0.5, c + 2.6, d + 3.4, Z(35), Z(36), "#3a3a40");
+    cyl(c, d, c, d, 0, Z(16), "#6c6c74", { seg: 26, soft: true });
+    cyl(c, d + 0.6, c - 1.2, d - 1.2, Z(16), Z(28), "#77777f", { seg: 26, soft: true });
+    cyl(c - 0.6, d + 1.6, c - 3.6, d - 3.8, Z(28), Z(34), "#83838b", { seg: 22, soft: true });
+    box(c - 3, d - 0.5, c + 2.6, d + 3.4, Z(34), Z(35), "#3a3a40");
   },
   wardrobe(L) {
     const { lw, lh, Z, box, c } = L, top = Z(215);
@@ -195,11 +202,12 @@ const PL_MODELS = {
     for (const d of [-0.4, 0, 0.4]) box(8.5 + d, 2.4, 8.5 + d + 0.12, 2.6, Z(112), Z(128), "#2a2420");
   },
   fridge(L) {
-    const { lw, lh, Z, box } = L, top = Z(185);
-    box(0, 0, lw, lh, 0, top, "#ecebe8", { f: "#f1f0ed" });
+    const { lw, lh, Z, box, rbox } = L, top = Z(185);
+    rbox(0, 0, lw, lh, 0, top, "#ecebe8", 0.6);
     box(0.2, lh - 0.02, lw - 0.2, lh + 0.08, Z(118), Z(120), "#bdbcb8");
     box(lw - 1.7, lh + 0.08, lw - 1.1, lh + 0.5, Z(125), Z(165), "#c4c4c4"); box(lw - 1.7, lh + 0.08, lw - 1.1, lh + 0.5, Z(92), Z(112), "#c4c4c4");
     for (const [u, z, c] of [[3, 150, "#222"], [4.6, 142, "#c33"], [6.4, 152, "#ddd"], [3.6, 128, "#333"]]) box(u, lh + 0.02, u + 1.1, lh + 0.16, Z(z), Z(z + 9), c);
+    box(1, 0.4, 3.4, 4, top, top + 0.15, "#1d1d20");
   },
   counter(L) {
     const { lw, lh, Z, box, cyl } = L, s0 = lw * 0.42;
@@ -230,9 +238,10 @@ const PL_MODELS = {
     cyl(lw - 2.2, lh - 2.4, 1.3, 1.3, Z(88), Z(108), "#c9a46a");
   },
   wallcab(L) {
-    const { lw, lh, Z, box } = L;
+    const { lw, lh, Z, box, rbox } = L;
     box(0, 0, lw, lh, Z(140), Z(200), "#7a2a22", { f: "#8a3027" });
     box(lw / 2 - 0.05, lh - 0.02, lw / 2 + 0.05, lh + 0.08, Z(142), Z(198), "#4e1712");
+    rbox(1.5, lh, lw - 3, lh + 1.4, Z(70), Z(150), "#211e24", 0.6, true);
   },
   dryer(L) {
     const { lw, lh, Z, box } = L, top = Z(90);
@@ -243,14 +252,15 @@ const PL_MODELS = {
     box(3.5, 7.9, 12, 8.3, Z(60), top - 0.3, "#cacace"); box(13.5, 7.9, 19, 8.3, Z(48), top - 0.3, "#2b2b30"); box(20, 0.8, 27, 4.2, top, top + 0.3, "#222226");
   },
   bath(L) {
-    const { lw, lh, Z, box, cyl, WH } = L;
-    box(1, 1, lw - 1, lh - 1, 0, Z(6), "#cfcfcf");
-    box(0, 0, lw, lh, Z(6), Z(55), "#f7f7f7");
-    box(1.6, 1.6, lw - 1.6, lh - 1.6, Z(55), Z(55.1), "#dfe6ec"); box(3.2, 3, lw - 3, lh - 3, Z(55.1), Z(55.2), "#cdd7e0");
+    const { lw, lh, Z, box, cyl, rbox, WH } = L;
+    rbox(1, 1, lw - 1, lh - 1, 0, Z(6), "#cfcfcf", 1);
+    rbox(0, 0, lw, lh, Z(6), Z(55), "#f7f7f7", 1.6);
+    rbox(1.3, 1.3, lw - 1.3, lh - 1.3, Z(55), Z(55.1), "#e3e9ee", 2.4);
+    rbox(2.6, 2.4, lw - 2.4, lh - 2.4, Z(55.1), Z(55.2), "#cbd5de", 3);
     cyl(lw - 4.5, lh / 2, 0.5, 0.5, Z(55.2), Z(55.3), "#9aa3ab", { seg: 8 });
     cyl(1.4, 0.9, 0.32, 0.32, Z(55), WH - 0.9, "#38383d", { seg: 8 });
-    box(1.1, 0.6, 1.7, 5, WH - 0.9, WH - 0.5, "#38383d"); box(-0.2, 3.6, 3.6, 7.6, WH - 1.3, WH - 1.0, "#2d2d31");
-    box(1, 0, 4.5, 0.8, Z(80), Z(84), "#38383d");
+    box(1.1, 0.6, 1.7, 5, WH - 0.9, WH - 0.5, "#38383d"); rbox(-0.2, 3.6, 3.6, 7.6, WH - 1.3, WH - 1.0, "#2d2d31", 0.4);
+    box(1, 0, 4.5, 0.8, Z(80), Z(84), "#38383d"); cyl(2.8, 1.6, 0.35, 0.35, Z(60), Z(84), "#38383d", { seg: 6 });
     for (const [u, v, r, h, c] of [[4.5, 1.2, 0.6, 15, "#e83e8c"], [5.8, 1.1, 0.5, 13, "#ff7a2a"], [7, 1.2, 0.55, 11, "#a83ad6"], [8.2, 1.1, 0.5, 11, "#2a5bd6"], [9.4, 1.2, 0.6, 14, "#f2c6d8"]]) cyl(u, v, r, r, Z(55), Z(55 + h), c, { seg: 8 });
   },
   sink(L) {
@@ -263,21 +273,21 @@ const PL_MODELS = {
     cyl(lw - 2, lh - 2, 0.7, 0.7, Z(84), Z(91), "#1c2a44", { seg: 10 });
   },
   toilet(L) {
-    const { lw, lh, Z, box, cyl } = L, c = lw / 2;
-    box(0.4, 0, lw - 0.4, 3.6, Z(38), Z(82), "#f6f6f6");
+    const { lw, lh, Z, cyl, rbox } = L, c = lw / 2;
+    rbox(0.4, 0, lw - 0.4, 3.6, Z(38), Z(82), "#f6f6f6", 0.8);
     cyl(c, 1.8, 0.6, 0.6, Z(82), Z(82.5), "#cfcfcf", { seg: 10 });
     cyl(c, 7.6, 2.2, 3, 0, Z(38), "#f2f2f2", { seg: 16 });
     cyl(c, 8.1, c - 0.2, 4.6, Z(38), Z(42), "#fafafa", { seg: 22 });
     cyl(c, 8.5, c - 1.6, 3.2, Z(42), Z(42.1), "#d4dbe1", { seg: 18 });
-    box(0.8, 3.7, lw - 0.8, 4.4, Z(42), Z(88), "#fbfbfb");
+    rbox(0.8, 3.7, lw - 0.8, 4.4, Z(42), Z(88), "#fbfbfb", 0.3);
   },
   washer(L) {
-    const { lw, lh, Z, box, poly } = L;
-    box(0, 0, lw, lh, 0, Z(85), "#f2f2f2", { f: "#f7f7f7" });
+    const { lw, lh, Z, box, poly, rbox } = L;
+    rbox(0, 0, lw, lh, 0, Z(85), "#f2f2f2", 0.7);
     box(0.5, lh - 0.02, lw - 0.5, lh + 0.08, Z(72), Z(82), "#e2e2e2");
     const ring = (r, c, dv) => { const p = []; for (let i = 0; i < 22; i++) { const a = (i / 22) * Math.PI * 2; p.push([lw / 2 + Math.cos(a) * r, lh + dv, Z(38) + Math.sin(a) * r * 0.5]); } poly(p, c); };
     ring(3.8, "#d4d8dc", 0.1); ring(2.9, "#3a4552", 0.16);
-    box(1.5, 1.5, 8, 4, Z(85), Z(88), "#1c1c1e");
+    box(1.5, 1.5, 8, 4, Z(85), Z(88), "#1c1c1e"); box(7, 1.2, 9.5, 2.4, Z(85), Z(86), "#c78b6a");
   },
   radiator(L) {
     const { lw, lh, Z, box } = L;
@@ -316,17 +326,17 @@ const PL_MODELS = {
     box(0, 0, lw, lh, 0, 0.15, c("#4c544c"));
   },
   dock(L) {
-    const { lw, lh, Z, box, halo } = L;
-    box(0.4, 5.6, lw - 0.4, lh, 0, Z(1.5), "#d9d9d9");
-    box(0, 0, lw, 5.6, 0, Z(56), "#f4f4f4", { f: "#ebebeb" });
-    box(0.3, 0.3, lw - 0.3, 5.3, Z(56), Z(58), "#dedede");
+    const { lw, lh, Z, box, rbox, halo } = L;
+    rbox(0.4, 5.4, lw - 0.4, lh, 0, Z(1.5), "#d9d9d9", 0.8);
+    rbox(0, 0, lw, 5.6, 0, Z(56), "#f4f4f4", 0.9);
+    rbox(0.3, 0.3, lw - 0.3, 5.3, Z(56), Z(58), "#dedede", 0.8);
     box(lw / 2 - 0.05, 5.6, lw / 2 + 0.05, 5.72, Z(8), Z(54), "#c6c6c6");
     halo(lw / 2, 5.7, Z(50), 1.6, "rgba(140,200,255,.85)", 2);
   },
   humid(L) {
-    const { lw, lh, Z, box, halo } = L;
-    box(0, 0, lw, lh, 0, Z(60), "#f2f2f2", { f: "#f6f6f6" });
-    box(0.6, 0.6, lw - 0.6, lh - 0.6, Z(60), Z(61), "#2b2b30");
+    const { lw, lh, Z, rbox, halo } = L;
+    rbox(0, 0, lw, lh, 0, Z(60), "#f2f2f2", 1.2);
+    rbox(0.6, 0.6, lw - 0.6, lh - 0.6, Z(60), Z(61), "#2b2b30", 0.8);
     halo(lw / 2, lh, Z(52), 1.4, "rgba(120,220,255,.8)", 2);
   },
   scale(L) {
@@ -395,7 +405,15 @@ function plBuild(it, WH, st, wallCut) {
   };
   const cyl = (cu, cv, ru, rv, z0, z1, c, o) => {
     const p = T(cu, cv), rx = odd ? rv : ru, ry = odd ? ru : rv;
-    prims.push({ k: "cyl", cx: p[0], cy: p[1], rx, ry, x0: p[0] - rx, x1: p[0] + rx, y0: p[1] - ry, y1: p[1] + ry, z0, z1, c: plRgb(c), seg: o && o.seg });
+    prims.push({ k: "cyl", cx: p[0], cy: p[1], rx, ry, x0: p[0] - rx, x1: p[0] + rx, y0: p[1] - ry, y1: p[1] + ry, z0, z1, c: plRgb(c), seg: o && o.seg, soft: !!(o && o.soft) });
+  };
+  // скруглённый прямоугольник-призма: мягкие формы (матрас, подушки, сиденья, ванна)
+  const rbox = (u0, v0, u1, v1, z0, z1, c, rad = 0.6, soft) => {
+    rad = Math.max(0.05, Math.min(rad, (u1 - u0) / 2, (v1 - v0) / 2)); const pts = [], n = 4;
+    for (const [cu, cv, a0] of [[u1 - rad, v1 - rad, 0], [u0 + rad, v1 - rad, 0.5], [u0 + rad, v0 + rad, 1], [u1 - rad, v0 + rad, 1.5]])
+      for (let i = 0; i <= n; i++) { const a = (a0 + (i / n) * 0.5) * Math.PI; pts.push(T(cu + Math.cos(a) * rad, cv + Math.sin(a) * rad)); }
+    const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+    prims.push({ k: "cyl", pts, soft: !!soft, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), z0, z1, c: plRgb(c) });
   };
   const poly = (pts, c) => {
     const w = pts.map(([u, v, z]) => { const q = T(u, v); return [q[0], q[1], z]; });
@@ -413,7 +431,7 @@ function plBuild(it, WH, st, wallCut) {
   }
   // предмет на стене, которая сейчас срезана (стоит между зрителем и комнатой), рисуется низким
   const cut = !!(ty.mount && wallCut && wallCut(...T(lw / 2, -1)));
-  model({ lw, lh, Z: plZ, WH, on, st, cut, id: it.id, c: (d) => it.c || d, box, cyl, poly, glow, halo });
+  model({ lw, lh, Z: plZ, WH, on, st, cut, id: it.id, c: (d) => it.c || d, box, rbox, cyl, poly, glow, halo });
   return { prims, pre, post };
 }
 
@@ -424,19 +442,20 @@ function plDefault() {
     return Object.assign({ id: Math.random().toString(36).slice(2, 9), t, x, y, r, w: r % 2 ? lh : lw, h: r % 2 ? lw : lh }, ext || {});
   };
   return {
-    v: 2,
+    v: 3,
     rooms: { 1: "Зал", 2: "Кухня", 3: "Ванная", 4: "Прихожая" },
     items: [
       // зал: у левой стены — вешалка, база пылесоса, стол с ПК и роутером; окно с батареей; кровать изголовьем к правой стене
       it("rack", 9, 124, 3), it("dock", 12, 164, 3), it("weights", 22, 165), it("desk", 12, 176, 3),
       it("pc", 13, 197, 3), it("router", 13, 191, 3), it("chair", 25, 183, 1),
       it("window", 18, 203, 2), it("radiator", 22, 201, 2), it("scale", 40, 195), it("beanbag", 44, 187), it("mic", 61, 198),
-      it("bed", 57, 155, 1), it("table", 60, 188), it("humid", 86, 192), it("ac", 93, 188, 1),
+      it("bed", 59, 156, 1), it("table", 62, 187), it("humid", 86, 192), it("ac", 93, 188, 1),
       it("lamp", 51, 175, 0, 0, 0, { room: "Зал" }), it("switch", 49, 139, 1, 0, 0, { room: "Зал" }),
-      // кухня
-      it("counter", 4, 1), it("fridge", 35, 1), it("lowcab", 1, 30, 3, 16, 10), it("wallcab", 1, 30, 3, 16, 6), it("stove", 1, 46, 3),
-      it("gchair", 30, 30, 1), it("dryer", 48, 25), it("sofa", 46, 40, 2), it("window", 84, 27, 1, 18, 3, { c: "#45454c" }),
-      it("lamp", 20, 26, 0, 0, 0, { room: "Кухня" }), it("switch", 12, 55, 2, 0, 0, { room: "Кухня" }),
+      // кухня (снято от балкона: проём в прихожую — в дальней стене): справа от проёма холодильник и мойка с навесными шкафами,
+      // в дальнем углу игровое кресло, вдоль правой стены диванчик, посередине сушилка; у камеры плита, слева тумба с красным шкафчиком
+      it("window", 28, 0, 0, 18, 3, { c: "#45454c" }), it("stove", 14, 1, 0), it("lowcab", 1, 10, 3, 16, 10), it("wallcab", 1, 10, 3, 16, 6),
+      it("fridge", 34, 43, 2), it("counter", 47, 41, 2, 24, 12), it("gchair", 60, 29, 0), it("sofa", 72, 22, 1, 31, 14), it("dryer", 38, 23, 0, 22, 11),
+      it("lamp", 22, 28, 0, 0, 0, { room: "Кухня" }), it("switch", 13, 55, 2, 0, 0, { room: "Кухня" }),
       // прихожая
       it("door", 0, 70, 3), it("rug", 3, 72, 3, 14, 9, { c: "#2f3033" }), it("shoes", 3, 58), it("intercom", 0, 89, 3), it("switch", 0, 65, 3, 0, 0, { room: "Прихожая" }),
       it("mirrorwr", 1, 89, 3), it("dresser", 2, 103, 3), it("wardrobe", 35, 58, 1), it("idoor", 43, 92, 1),
@@ -455,7 +474,7 @@ function plRefreshMaps() { (window.zhMaps || []).forEach((m) => { m._dirty = tru
 async function plLoad() {
   try {
     const p = await api("/api/home/plan");
-    window.zhPlan = p && p.v === 2 && Array.isArray(p.items) ? p : plDefault();
+    window.zhPlan = p && p.v === 3 && Array.isArray(p.items) ? p : plDefault();
     plLoad.ok = true;
   } catch (e) { if (!window.zhPlan) window.zhPlan = plDefault(); }
   plRefreshMaps();

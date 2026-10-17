@@ -182,14 +182,23 @@ class DreameMap3D {
         }
         face([P(x0, y0, z1), P(x1, y0, z1), P(x1, y1, z1), P(x0, y1, z1)], (p.f && p.f.t) || c, p.tk || 1);
       } else if (p.k === "cyl") {
-        const seg = p.seg || 18, ring = [];
-        for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI * 2; ring.push([p.cx + Math.cos(a) * p.rx, p.cy + Math.sin(a) * p.ry]); }
+        // цилиндр или призма по контуру (скруглённые мягкие формы — матрасы, подушки, ванна)
+        const ring = p.pts ? p.pts : []; const seg = p.pts ? ring.length : p.seg || 18;
+        if (!p.pts) for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI * 2; ring.push([p.cx + Math.cos(a) * p.rx, p.cy + Math.sin(a) * p.ry]); }
         if (side && p.z1 - p.z0 > 0.05) for (let i = 0; i < seg; i++) {
           const a = ring[i], b = ring[(i + 1) % seg], nx = b[1] - a[1], ny = -(b[0] - a[0]);
           if (nx * sn + ny * cs <= 0) continue;
-          const k = lit(nx, ny); path([P(a[0], a[1], p.z0), P(b[0], b[1], p.z0), P(b[0], b[1], p.z1), P(a[0], a[1], p.z1)]); ctx.fillStyle = col(c, k); ctx.fill(); ctx.strokeStyle = col(c, k); ctx.lineWidth = 0.6; ctx.stroke();
+          const k = lit(nx, ny), q0 = P(a[0], a[1], p.z0), q1 = P(a[0], a[1], p.z1); path([q0, P(b[0], b[1], p.z0), P(b[0], b[1], p.z1), q1]);
+          let fs = col(c, k); if (c[3] > 0.9 && q0[1] - q1[1] > 4) { fs = ctx.createLinearGradient(q0[0], q0[1], q1[0], q1[1]); fs.addColorStop(0, col(c, k * 0.78)); fs.addColorStop(1, col(c, k * 1.04)); }
+          ctx.fillStyle = fs; ctx.fill(); ctx.strokeStyle = ctx.fillStyle; ctx.lineWidth = 0.6; ctx.stroke();
         }
-        path(ring.map((q) => P(q[0], q[1], p.z1))); ctx.fillStyle = col((p.f && p.f.t) || c, p.tk || 1); ctx.fill();
+        const tp = ring.map((q) => P(q[0], q[1], p.z1)); path(tp);
+        if (p.soft && !thin) { // мягкий верх: светлее к центру, как у ткани
+          let mx = 0, my = 0; for (const q of tp) { mx += q[0]; my += q[1]; } mx /= tp.length; my /= tp.length;
+          let rr = 1; for (const q of tp) rr = Math.max(rr, Math.hypot(q[0] - mx, q[1] - my));
+          const g = ctx.createRadialGradient(mx, my - rr * 0.15, 0, mx, my, rr); g.addColorStop(0, col(c, 1.13)); g.addColorStop(1, col(c, 0.86)); ctx.fillStyle = g;
+        } else ctx.fillStyle = col((p.f && p.f.t) || c, p.tk || 1);
+        ctx.fill();
         if (!thin && c[3] > 0.9) { ctx.strokeStyle = col(c, 0.8); ctx.lineWidth = 0.6; ctx.stroke(); }
       } else if (p.k === "poly") {
         path(p.pts.map((q) => P(q[0], q[1], q[2]))); ctx.fillStyle = col(c, p.tk || 1); ctx.fill();
