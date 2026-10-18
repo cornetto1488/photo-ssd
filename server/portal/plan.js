@@ -34,6 +34,8 @@ window.PL_TYPES = {
   rug: { n: "Коврик", lw: 14, lh: 10, i: "▬", flat: true },
   dock: { n: "База пылесоса", lw: 7, lh: 9, i: "🤖" },
   humid: { n: "Увлажнитель", lw: 9, lh: 7, i: "💧" },
+  power: { n: "Зарядная станция", lw: 8, lh: 6, i: "🔋" },
+  fan: { n: "Вентилятор", lw: 7, lh: 7, i: "🌀" },
   scale: { n: "Весы", lw: 6, lh: 6, i: "⚖", flat: true },
   mic: { n: "Микрофон на стойке", lw: 3, lh: 3, i: "🎙" },
   weights: { n: "Блины и гантели", lw: 6, lh: 6, i: "🏋" },
@@ -68,14 +70,13 @@ const PL_MODELS = {
     box(lw - 0.05, lh * 0.62, lw + 0.2, lh * 0.62 + 1.8, Z(13), Z(23), "#26262c");
     rbox(0, 0, lw, 2.2, 0, Z(98), "#55555e", 0.9, true);
     rbox(1, 1.9, lw - 1, 2.5, Z(38), Z(92), "#60606a", 0.6, true);
-    rbox(0.6, 2.6, lw - 0.6, lh - 0.6, Z(32), Z(51), "#4a4a53", 1.5, true);
-    rbox(1.6, 3.3, lw / 2 - 0.5, 9, Z(51), Z(61), "#a4a4ac", 1.8, true);
-    rbox(lw / 2 + 0.5, 3.6, lw - 1.6, 9.2, Z(51), Z(60), "#9a9aa2", 1.8, true);
-    rbox(2.4, 11, lw - 0.8, lh - 4, Z(51), Z(55), "#acacb3", 3, true);
-    rbox(4, 14, 17, 25, Z(55), Z(61), "#bcbcc3", 3.5, true);
-    rbox(11, 23, 25, 32, Z(54), Z(59.5), "#a5a5ad", 3.5, true);
-    rbox(15, 11.5, 25, 18, Z(54), Z(58.5), "#c5c5cb", 2.6, true);
-    rbox(lw - 1.3, 13, lw + 0.6, lh - 7, Z(27), Z(55), "#a0a0a8", 0.6, true);
+    rbox(0.6, 2.6, lw - 0.6, lh - 0.6, Z(32), Z(51), "#6b5c56", 1.5, true);
+    rbox(1.6, 3.3, lw / 2 - 0.5, 9, Z(51), Z(61), "#d9d4ce", 1.8, true);
+    rbox(lw / 2 + 0.5, 3.6, lw - 1.6, 9.2, Z(51), Z(60), "#cfc9c2", 1.8, true);
+    rbox(3, 12, 16, 27, Z(51), Z(58), "#e6e1db", 4, true);
+    rbox(5, 15, 14, 23, Z(58), Z(63), "#f0ece7", 3.2, true);
+    rbox(12, 22, 22, 31, Z(51), Z(57), "#ddd7d0", 3.5, true);
+    rbox(15, 26, 21, 30, Z(57), Z(60), "#ebe6e0", 2.4, true);
   },
   sofa(L) {
     const { lw, lh, Z, rbox, c } = L;
@@ -158,7 +159,7 @@ const PL_MODELS = {
     cyl(c, d, c, d, 0, Z(16), "#6c6c74", { seg: 26, soft: true });
     cyl(c, d + 0.6, c - 1.2, d - 1.2, Z(16), Z(28), "#77777f", { seg: 26, soft: true });
     cyl(c - 0.6, d + 1.6, c - 3.6, d - 3.8, Z(28), Z(34), "#83838b", { seg: 22, soft: true });
-    box(c - 3, d - 0.5, c + 2.6, d + 3.4, Z(34), Z(35), "#3a3a40");
+    box(c - 3, d - 0.5, c + 2.6, d + 3.4, Z(34), Z(35), "#3a3a40"); box(c - 3, d - 0.9, c + 2.6, d - 0.5, Z(35), Z(52), "#22252b", { f: "#4b6a3a" });
   },
   wardrobe(L) {
     const { lw, lh, Z, box, c } = L, top = Z(215);
@@ -339,6 +340,21 @@ const PL_MODELS = {
     rbox(0.6, 0.6, lw - 0.6, lh - 0.6, Z(60), Z(61), "#2b2b30", 0.8);
     halo(lw / 2, lh, Z(52), 1.4, "rgba(120,220,255,.8)", 2);
   },
+  power(L) {
+    const { lw, lh, Z, box, rbox, halo } = L;
+    rbox(0, 0, lw, lh, 0, Z(38), "#e8e4dc", 0.8);
+    box(0.8, lh - 0.02, lw - 0.8, lh + 0.08, Z(6), Z(32), "#17171a");
+    box(lw / 2 - 0.5, lh + 0.08, lw / 2 + 0.5, lh + 0.14, Z(14), Z(24), "#f2f2f2");
+    box(1, 1, lw - 1, 1.6, Z(38), Z(44), "#cfcac2"); box(1, 1, 1.6, lh - 1, Z(38), Z(44), "#cfcac2"); box(lw - 1.6, 1, lw - 1, lh - 1, Z(38), Z(44), "#cfcac2"); box(1, 1, lw - 1, 1.6, Z(42), Z(44), "#cfcac2");
+    halo(lw / 2, lh + 0.1, Z(28), 1.2, "rgba(120,220,160,.8)", 2);
+  },
+  fan(L) {
+    const { lw, lh, Z, cyl, poly } = L, c = lw / 2;
+    cyl(c, c, 2.2, 2.2, 0, Z(3), "#1b1b1e", { seg: 14 }); cyl(c, c, 0.35, 0.35, Z(3), Z(70), "#1b1b1e", { seg: 8 });
+    const ring = (r, col, dv) => { const p = []; for (let i = 0; i < 20; i++) { const a = (i / 20) * Math.PI * 2; p.push([c + Math.cos(a) * r, c + dv, Z(88) + Math.sin(a) * r * 0.5]); } poly(p, col); };
+    cyl(c, c - 0.6, 1.4, 1.4, Z(80), Z(96), "#f2f2f2", { seg: 12 });
+    ring(3.2, "#f4f4f4", 0.9); ring(2.6, "rgba(210,215,220,.85)", 1);
+  },
   scale(L) {
     const { lw, lh, Z, box } = L;
     box(0, 0, lw, lh, 0, Z(2.5), "#f4f4f4"); box(lw / 2 - 1, 0.8, lw / 2 + 1, 1.6, Z(2.5), Z(2.6), "#2b2b30");
@@ -442,14 +458,14 @@ function plDefault() {
     return Object.assign({ id: Math.random().toString(36).slice(2, 9), t, x, y, r, w: r % 2 ? lh : lw, h: r % 2 ? lw : lh }, ext || {});
   };
   return {
-    v: 3,
+    v: 4,
     rooms: { 1: "Зал", 2: "Кухня", 3: "Ванная", 4: "Прихожая" },
     items: [
       // зал: у левой стены — вешалка, база пылесоса, стол с ПК и роутером; окно с батареей; кровать изголовьем к правой стене
       it("rack", 9, 124, 3), it("dock", 12, 164, 3), it("weights", 22, 165), it("desk", 12, 176, 3),
       it("pc", 13, 197, 3), it("router", 13, 191, 3), it("chair", 25, 183, 1),
-      it("window", 18, 203, 2), it("radiator", 22, 201, 2), it("scale", 40, 195), it("beanbag", 44, 187), it("mic", 61, 198),
-      it("bed", 59, 156, 1), it("table", 62, 187), it("humid", 86, 192), it("ac", 93, 188, 1),
+      it("window", 18, 203, 2), it("radiator", 22, 201, 2), it("scale", 40, 195), it("beanbag", 44, 187), it("mic", 64, 190),
+      it("bed", 59, 156, 1), it("table", 68, 187), it("power", 87, 192), it("fan", 59, 196), it("ac", 93, 188, 1),
       it("lamp", 51, 175, 0, 0, 0, { room: "Зал" }), it("switch", 49, 139, 1, 0, 0, { room: "Зал" }),
       // кухня (снято от балкона: проём в прихожую — в дальней стене): справа от проёма холодильник и мойка с навесными шкафами,
       // в дальнем углу игровое кресло, вдоль правой стены диванчик, посередине сушилка; у камеры плита, слева тумба с красным шкафчиком
@@ -474,7 +490,7 @@ function plRefreshMaps() { (window.zhMaps || []).forEach((m) => { m._dirty = tru
 async function plLoad() {
   try {
     const p = await api("/api/home/plan");
-    window.zhPlan = p && p.v === 3 && Array.isArray(p.items) ? p : plDefault();
+    window.zhPlan = p && p.v === 4 && Array.isArray(p.items) ? p : plDefault();
     plLoad.ok = true;
   } catch (e) { if (!window.zhPlan) window.zhPlan = plDefault(); }
   plRefreshMaps();
