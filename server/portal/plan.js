@@ -27,6 +27,8 @@ window.PL_TYPES = {
   sink: { n: "Раковина", lw: 11, lh: 9, i: "🚿" },
   toilet: { n: "Унитаз", lw: 8, lh: 13, i: "🚽" },
   washer: { n: "Стиральная машина", lw: 12, lh: 11, i: "🌀" },
+  pipebox: { n: "Короб с лючком", lw: 24, lh: 4, i: "▥" },
+  bin: { n: "Ведро", lw: 5, lh: 5, i: "🗑" },
   radiator: { n: "Батарея", lw: 16, lh: 2, i: "♨" },
   window: { n: "Окно со шторами", lw: 28, lh: 3, i: "🪟", mount: true },
   door: { n: "Входная дверь", lw: 18, lh: 3, i: "🚪", mount: true },
@@ -290,6 +292,18 @@ const PL_MODELS = {
     ring(3.8, "#d4d8dc", 0.1); ring(2.9, "#3a4552", 0.16);
     box(1.5, 1.5, 8, 4, Z(85), Z(88), "#1c1c1e"); box(7, 1.2, 9.5, 2.4, Z(85), Z(86), "#c78b6a");
   },
+  pipebox(L) {
+    const { lw, lh, Z, box, cyl } = L;
+    box(0, 0, lw, lh, 0, Z(100), "#5e5d5b", { f: "#666563" });
+    box(0, 0, lw, lh + 0.3, Z(100), Z(103), "#8f8e8b");
+    box(lw * 0.55, lh - 0.02, lw * 0.55 + 6, lh + 0.08, Z(30), Z(85), "#f2f2f2");
+    if (lw > 10) { cyl(3, lh / 2, 1.1, 1.1, Z(103), Z(113), "#f6f6f6", { seg: 12 }); cyl(7, lh / 2, 0.7, 0.7, Z(103), Z(118), "#cfe0ea", { seg: 10 }); }
+  },
+  bin(L) {
+    const { lw, lh, Z, cyl } = L, c = lw / 2;
+    cyl(c, lh / 2, c, lh / 2, 0, Z(32), "#9aa0a6", { seg: 16 });
+    cyl(c, lh / 2, c - 0.3, lh / 2 - 0.3, Z(32), Z(32.3), "#3a3d42", { seg: 16 });
+  },
   radiator(L) {
     const { lw, lh, Z, box } = L;
     box(0, 0.2, lw, 0.6, Z(10), Z(12), "#dedede");
@@ -422,8 +436,10 @@ function plBuild(it, WH, st, wallCut) {
   const ty = PL_TYPES[it.t], model = PL_MODELS[it.t]; if (!ty || !model) return null;
   const r = (((it.r || 0) % 4) + 4) % 4, odd = r % 2;
   const lw = odd ? it.h : it.w, lh = odd ? it.w : it.h;
-  const T = (u, v) => r === 0 ? [it.x + u, it.y + v] : r === 1 ? [it.x + lh - v, it.y + u] : r === 2 ? [it.x + lw - u, it.y + lh - v] : [it.x + v, it.y + lw - u];
-  const FM = [{ b: "n", f: "s", l: "w", r: "e" }, { b: "e", f: "w", l: "n", r: "s" }, { b: "s", f: "n", l: "e", r: "w" }, { b: "w", f: "e", l: "s", r: "n" }][r];
+  const fl = !!it.f; // f — модель отражена по ширине (душ на другом конце ванны и т. п.)
+  const T = (u0, v) => { const u = fl ? lw - u0 : u0; return r === 0 ? [it.x + u, it.y + v] : r === 1 ? [it.x + lh - v, it.y + u] : r === 2 ? [it.x + lw - u, it.y + lh - v] : [it.x + v, it.y + lw - u]; };
+  const FM = Object.assign({}, [{ b: "n", f: "s", l: "w", r: "e" }, { b: "e", f: "w", l: "n", r: "s" }, { b: "s", f: "n", l: "e", r: "w" }, { b: "w", f: "e", l: "s", r: "n" }][r]);
+  if (fl) [FM.l, FM.r] = [FM.r, FM.l];
   const prims = [], pre = [], post = [];
   const box = (u0, v0, u1, v1, z0, z1, c, f) => {
     const a = T(u0, v0), b = T(u1, v1), o = { k: "box", x0: Math.min(a[0], b[0]), y0: Math.min(a[1], b[1]), x1: Math.max(a[0], b[0]), y1: Math.max(a[1], b[1]), z0, z1, c: plRgb(c) };
@@ -469,18 +485,18 @@ function plDefault() {
     return Object.assign({ id: Math.random().toString(36).slice(2, 9), t, x, y, r, w: r % 2 ? lh : lw, h: r % 2 ? lw : lh }, ext || {});
   };
   return {
-    v: 7,
+    v: 9,
     rooms: { 1: "Зал", 2: "Кухня", 3: "Ванная", 4: "Прихожая" },
     // правки карты: ниша под кроватью — пол зала (робот туда не заезжает), её настоящие стены
     // комнаты прямоугольниками (координаты карты пылесоса, клетки по 5 см): ровные стены вместо рваных краёв лидара
     geo: {
       rooms: {
         2: [[1, 1, 44, 54], [44, 20, 86, 53]],
-        4: [[4, 57, 44, 118], [1, 66, 3, 86]],
+        4: [[4, 57, 44, 111], [1, 66, 3, 86]],
         3: [[47, 61, 87, 110]],
-        1: [[11, 121, 98, 204]], // зал — ровный прямоугольник, северная стена (к ванной) прямая
+        1: [[11, 114, 98, 204]], // зал — ровный прямоугольник, северная стена (к ванной) прямая
       },
-      doors: [[13, 55, 33, 56, 4], [45, 90, 46, 100, 4], [20, 119, 36, 120, 1]],
+      doors: [[13, 55, 33, 56, 4], [45, 86, 46, 97, 4], [20, 112, 36, 113, 1]],
     },
     items: [
       // зал — по скану Scaniverse, совмещённому с картой: вдоль западной стены вешалка, база пылесоса (точка зарядки) и стол
@@ -489,7 +505,7 @@ function plDefault() {
       it("pc", 12, 198, 3), it("router", 12, 191, 3), it("chair", 26, 186, 1),
       it("window", 34, 203, 2, 26, 3), it("radiator", 39, 201, 2), it("scale", 31, 197), it("beanbag", 67, 187), it("hookah", 60, 181), it("mic", 85, 194),
       it("bed", 58, 121, 1, 31, 40), it("power", 92, 153, 1), it("table", 66, 156), it("ac", 94, 184, 1),
-      it("lamp", 52, 165, 0, 0, 0, { room: "Зал" }), it("switch", 37, 121, 0, 0, 0, { room: "Зал" }),
+      it("lamp", 52, 165, 0, 0, 0, { room: "Зал" }), it("switch", 37, 114, 0, 0, 0, { room: "Зал" }),
       // кухня (снято от балкона: проём в прихожую — в дальней стене): справа от проёма холодильник и мойка с навесными шкафами,
       // в дальнем углу игровое кресло, вдоль правой стены диванчик, посередине сушилка; у камеры плита, слева тумба с красным шкафчиком
       it("window", 28, 0, 0, 18, 3, { c: "#45454c" }), it("stove", 14, 1, 0), it("lowcab", 1, 10, 3, 16, 10), it("wallcab", 1, 10, 3, 16, 6),
@@ -497,11 +513,13 @@ function plDefault() {
       it("lamp", 22, 28, 0, 0, 0, { room: "Кухня" }), it("switch", 13, 55, 2, 0, 0, { room: "Кухня" }),
       // прихожая
       it("door", 0, 70, 3), it("rug", 3, 72, 3, 14, 9, { c: "#2f3033" }), it("shoes", 3, 58), it("intercom", 0, 89, 3), it("switch", 0, 65, 3, 0, 0, { room: "Прихожая" }),
-      it("mirrorwr", 1, 89, 3), it("dresser", 2, 103, 3), it("wardrobe", 32, 58, 1), it("idoor", 43, 92, 1),
-      it("switch", 34, 87, 1, 0, 0, { room: "Ванная" }), it("bulb", 18, 86, 0, 0, 0, { room: "Прихожая" }),
-      // ванная
-      it("bath", 71, 57, 1), it("toilet", 73, 97, 1), it("sink", 47, 62, 3), it("washer", 47, 75, 3),
-      it("rug", 58, 66, 1, 14, 10, { c: "#4a5249" }), it("rug", 63, 96, 1, 10, 8, { c: "#4a5249" }), it("bulb", 62, 90, 0, 0, 0, { room: "Ванная" }),
+      it("mirrorwr", 1, 86, 3, 10, 4), it("dresser", 2, 96, 3, 15, 9), it("wardrobe", 32, 58, 1), it("idoor", 43, 85, 1, 13, 3),
+      it("switch", 43, 99, 1, 0, 0, { room: "Ванная" }), it("bulb", 18, 86, 0, 0, 0, { room: "Прихожая" }),
+      // ванная — по скану Scaniverse: у двери стиральная машина, рядом у короткой стены раковина; вдоль дальней стены ванна
+      // (душ и флаконы у раковины), за ней ведро, унитаз и кафельный короб с лючком; коврики у ванны и унитаза
+      it("washer", 48, 99, 2), it("sink", 61, 101, 2), it("bath", 73, 80, 1, 30, 14), it("bin", 79, 75),
+      it("toilet", 64, 65, 1), it("pipebox", 62, 61, 0, 24, 4), it("pipebox", 78, 65, 1, 8, 8),
+      it("rug", 59, 84, 1, 14, 10, { c: "#4a5249" }), it("rug", 55, 65, 1, 9, 9, { c: "#4a5249" }), it("bulb", 66, 88, 0, 0, 0, { room: "Ванная" }),
     ],
   };
 }
@@ -513,7 +531,7 @@ function plRefreshMaps() { (window.zhMaps || []).forEach((m) => { m._dirty = tru
 async function plLoad() {
   try {
     const p = await api("/api/home/plan");
-    window.zhPlan = p && p.v === 7 && Array.isArray(p.items) ? p : plDefault();
+    window.zhPlan = p && p.v === 9 && Array.isArray(p.items) ? p : plDefault();
     plLoad.ok = true;
   } catch (e) { if (!window.zhPlan) window.zhPlan = plDefault(); }
   plRefreshMaps();
