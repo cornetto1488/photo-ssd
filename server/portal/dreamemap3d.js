@@ -19,9 +19,22 @@ class DreameMap3D {
   }
   setNames(n) { this.names = n || {}; this._dirty = true; }
   setData(m) {
-    this.map = m; this._mapId = (this._mapId || 0) + 1; this._ck = null;
-    const bin = atob(m.cells), n = bin.length, c = new Uint8Array(n);
+    const bin = atob(m.cells), n = bin.length; let c = new Uint8Array(n);
     for (let i = 0; i < n; i++) c[i] = bin.charCodeAt(i);
+    // пылесос хранит карту зеркально относительно квартиры — отражаем, чтобы всё стояло как в жизни
+    this.mir = this.opts.mirror !== false;
+    if (this.mir) {
+      const f = new Uint8Array(n), W = m.w, H = m.h;
+      for (let y = 0; y < H; y++) f.set(c.subarray((H - 1 - y) * W, (H - y) * W), y * W);
+      c = f;
+      const fy = (p) => p && [p[0], H - p[1]];
+      m = Object.assign({}, m, {
+        robot: fy(m.robot), charger: fy(m.charger),
+        rooms: (m.rooms || []).map((r) => Object.assign({}, r, { cy: H - r.cy })),
+        paths: (m.paths || []).map((p) => { const q = p.p.slice(); for (let i = 1; i < q.length; i += 2) q[i] = H - q[i]; return Object.assign({}, p, { p: q }); }),
+      });
+    }
+    this.map = m; this._mapId = (this._mapId || 0) + 1; this._ck = null;
     this.cells = c; this.w = m.w; this.h = m.h;
     // стены с видимыми гранями, считаем один раз
     const walls = [];
@@ -35,6 +48,28 @@ class DreameMap3D {
       const best = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a])[0];
       if (nw <= 1 && best) cl[y * m.w + x] = +best; else wc.push(x, y);
     }
+    // мелкие «островки» стен (до 24 клеток, не касаются наружной пустоты) — ножки мебели, а не стены
+    const seen = new Uint8Array(n), W2 = m.w, H2 = m.h;
+    for (let i = 0; i < n; i++) {
+      if (cl[i] !== 255 || seen[i]) continue;
+      const comp = [i]; seen[i] = 1; let outside = false;
+      for (let k = 0; k < comp.length; k++) {
+        const x = comp[k] % W2, y = (comp[k] / W2) | 0;
+        for (let oy = -1; oy <= 1; oy++) for (let ox = -1; ox <= 1; ox++) {
+          const xx = x + ox, yy = y + oy; if (xx < 0 || yy < 0 || xx >= W2 || yy >= H2) { outside = true; continue; }
+          const j = yy * W2 + xx; if (cl[j] === 0) outside = true;
+          if (cl[j] === 255 && !seen[j]) { seen[j] = 1; comp.push(j); }
+        }
+      }
+      if (outside || comp.length > 24) continue;
+      for (const j of comp) { // заменяем полом соседней комнаты
+        const x = j % W2, y = (j / W2) | 0; let best = 0;
+        for (let r = 1; r <= 3 && !best; r++) for (let oy = -r; oy <= r && !best; oy++) for (let ox = -r; ox <= r; ox++) { const xx = x + ox, yy = y + oy; if (xx < 0 || yy < 0 || xx >= W2 || yy >= H2) continue; const v = cl[yy * W2 + xx]; if (v && v !== 255) { best = v; break; } }
+        if (best) cl[j] = best;
+      }
+    }
+    wc.length = 0;
+    for (let i = 0; i < n; i++) if (cl[i] === 255) wc.push(i % W2, (i / W2) | 0);
     this.cellsClean = cl; this.wallsClean = wc;
     this.totalPts = m.paths.reduce((a, p) => a + p.p.length / 2, 0);
     this.replay();
@@ -113,6 +148,48 @@ class DreameMap3D {
     return k === 1 ? `hsl(${h},30%,20%)` : k === 2 ? `hsl(${h},62%,60%)` : k === 3 ? `hsl(${h},18%,28%)` : `hsl(${h},36%,42%)`;
   }
   setPlan(pl) { this.plan = pl; this._dirty = true; }
+  // план исправляет карту пылесоса: пол там, куда робот не заезжает (под кроватью), настоящие стены вместо краёв мебели
+  // предмет плана (координаты карты пылесоса) → координаты отражённой картинки
+  _mi(it) {
+    if (!this.mir) return it;
+    const r = ((it.r || 0) % 4 + 4) % 4;
+    return Object.assign({}, it, { y: this.h - it.y - it.h, r: r === 0 ? 2 : r === 2 ? 0 : r });
+  }
+  _planCells() {
+    const pl = this.plan || window.zhPlan, fix = (pl && pl.fix) || null, geo = (pl && pl.geo) || null, key = this._mapId + "|" + JSON.stringify(fix) + JSON.stringify(geo);
+    if (this._pcKey === key) return this._pc;
+    let cells = this.cellsClean, walls = this.wallsClean;
+    const fr = (r) => this.mir ? [r[0], this.h - 1 - r[3], r[2], this.h - 1 - r[1], r[4]] : r;
+    if (geo) { // чистая геометрия: комнаты — прямоугольники, стены — ровные полосы между ними, двери — проёмы
+      const w = this.w, h = this.h, T = geo.wall || 2, GAP = geo.gap || 9; cells = new Uint8Array(w * h);
+      const room = new Uint8Array(w * h);
+      for (const id in geo.rooms) for (const r0 of geo.rooms[id]) { const r = fr(r0); for (let y = Math.max(0, r[1]); y <= Math.min(h - 1, r[3]); y++) for (let x = Math.max(0, r[0]); x <= Math.min(w - 1, r[2]); x++) room[y * w + x] = +id; }
+      const isR = (x, y) => x >= 0 && y >= 0 && x < w && y < h && room[y * w + x] > 0;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const i = y * w + x; if (room[i]) { cells[i] = room[i]; continue; }
+        let near = false;
+        for (let oy = -T; oy <= T && !near; oy++) for (let ox = -T; ox <= T; ox++) if (isR(x + ox, y + oy)) { near = true; break; }
+        if (!near) { // щель между комнатами уже GAP клеток — тоже стена (толстые перегородки, ниши за шкафами)
+          let l = 0, r = 0, u = 0, d = 0;
+          for (let k = 1; k <= GAP; k++) { if (!l && isR(x - k, y)) l = k; if (!r && isR(x + k, y)) r = k; if (!u && isR(x, y - k)) u = k; if (!d && isR(x, y + k)) d = k; }
+          near = (l && r && l + r <= GAP + 1) || (u && d && u + d <= GAP + 1);
+        }
+        if (near) cells[i] = 255;
+      }
+      for (const d0 of geo.doors || []) { const d = fr(d0); for (let y = Math.max(0, d[1]); y <= Math.min(h - 1, d[3]); y++) for (let x = Math.max(0, d[0]); x <= Math.min(w - 1, d[2]); x++) if (cells[y * w + x] === 255) cells[y * w + x] = d0[4] || 1; }
+      walls = [];
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (cells[y * w + x] === 255) walls.push(x, y);
+    } else if (fix) {
+      const w = this.w, h = this.h; cells = cells.slice();
+      const put = (r, v, onlyEmpty) => { for (let y = Math.max(0, r[1]); y <= Math.min(h - 1, r[3]); y++) for (let x = Math.max(0, r[0]); x <= Math.min(w - 1, r[2]); x++) if (!onlyEmpty || !cells[y * w + x]) cells[y * w + x] = v; };
+      for (const r of fix.fill || []) put(fr(r), r[4] || 1, false);
+      for (const r of fix.walls || []) put(fr(r), 255, true);
+      walls = [];
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (cells[y * w + x] === 255) walls.push(x, y);
+    }
+    this._pcKey = key; this._pc = { cells, walls };
+    return this._pc;
+  }
   _planPal() {
     const pl = this.plan || window.zhPlan, rooms = (pl && pl.rooms) || {}, out = {};
     for (const r of (this.map && this.map.rooms) || []) out[r.id] = window.plRoomStyle ? window.plRoomStyle(rooms[r.id] || this.names[r.id] || "") : { floor: "#45474d", wall: "#8a8780" };
@@ -124,7 +201,7 @@ class DreameMap3D {
     const pl = this.plan || window.zhPlan;
     const st = window.zhDevState || {}, cosT = Math.sqrt(Math.max(0, 1 - sinT * sinT)), side = cosT > 0.02;
     const prims = [], pre = [], post = [];
-    for (const it of pl.items) { const r = window.plBuild(it, WH, st, this._wallCut); if (!r) continue; prims.push(...r.prims); pre.push(...r.pre); post.push(...r.post); }
+    for (const it0 of pl.items) { const it = this._mi(it0); const r = window.plBuild(it, WH, st, this._wallCut); if (!r) continue; prims.push(...r.prims); pre.push(...r.pre); post.push(...r.post); }
     const col = (c, k, a) => `rgba(${Math.min(255, c[0] * k) | 0},${Math.min(255, c[1] * k) | 0},${Math.min(255, c[2] * k) | 0},${a ?? c[3]})`;
     const path = (pts) => { ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]); ctx.closePath(); };
     const thin = s < 1.6;
@@ -218,7 +295,8 @@ class DreameMap3D {
     const { ctx, W, H, dpr } = this; const m = this.map; if (!m) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
     const planOn = this._planOn();
-    const w = this.w, h = this.h, cells = planOn ? this.cellsClean : this.cells, wallList = planOn ? this.wallsClean : this.walls;
+    const pc = planOn ? this._planCells() : null;
+    const w = this.w, h = this.h, cells = pc ? pc.cells : this.cells, wallList = pc ? pc.walls : this.walls;
     this._pal = planOn ? this._planPal() : null; const pal = this._pal;
     const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) / 2;
     const sinT = this.tilt, cosT = Math.sqrt(1 - sinT * sinT), cs = Math.cos(this.yaw), sn = Math.sin(this.yaw);
@@ -230,7 +308,11 @@ class DreameMap3D {
       for (const z of [-5, wallH]) { const X = rx, Y = ry * sinT - z * cosT; if (X < x0) x0 = X; if (X > x1) x1 = X; if (Y < y0) y0 = Y; if (Y > y1) y1 = Y; }
     }
     const s = Math.min((W * 0.92) / (x1 - x0), (H * 0.9) / (y1 - y0)) * this.zoom;
-    const OX = W / 2 - ((x0 + x1) / 2) * s, OY = H / 2 - ((y0 + y1) / 2) * s;
+    let OX = W / 2 - ((x0 + x1) / 2) * s, OY = H / 2 - ((y0 + y1) / 2) * s;
+    if (this.focus) { // приблизить точку карты (клетки) в центр кадра
+      const fx = this.focus[0] - cx, fy = this.focus[1] - cy;
+      OX = W / 2 - (fx * cs - fy * sn) * s; OY = H / 2 - (fx * sn + fy * cs) * s * sinT + (this.focus[2] || 0) * s * cosT;
+    }
     this._proj = { OX, OY, s, sinT, cs, sn, cx, cy };
     const hasSel = this.selected.size > 0;
     const P = (x, y, z) => { const dx = x - cx, dy = y - cy; const rx = dx * cs - dy * sn, ry = dx * sn + dy * cs; return [OX + rx * s, OY + ry * s * sinT - z * s * cosT]; };
@@ -297,7 +379,7 @@ class DreameMap3D {
     // слои пола и стен кэшируются, пока ракурс не меняется (в обоях карта статична — кадр дешёвый)
     let fl = null, wl = null;
     if (this.opts.cache) {
-      const key = [W, H, dpr, this.yaw.toFixed(4), this.tilt.toFixed(3), this.zoom.toFixed(3), [...this.selected].join(","), this._mapId, wallH, planOn ? JSON.stringify((this.plan || window.zhPlan).rooms || {}) : ""].join("|");
+      const key = [W, H, dpr, this.yaw.toFixed(4), this.tilt.toFixed(3), this.zoom.toFixed(3), [...this.selected].join(","), this._mapId, wallH, planOn ? JSON.stringify((this.plan || window.zhPlan).rooms || {}) + this._pcKey : ""].join("|");
       if (this._ck !== key) {
         const mk = () => { const c = document.createElement("canvas"); c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); const x = c.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); return [c, x]; };
         const [fc, fx] = mk(), [wc, wx] = mk(), [xc, xx] = mk();

@@ -458,15 +458,27 @@ function plDefault() {
     return Object.assign({ id: Math.random().toString(36).slice(2, 9), t, x, y, r, w: r % 2 ? lh : lw, h: r % 2 ? lw : lh }, ext || {});
   };
   return {
-    v: 4,
+    v: 6,
     rooms: { 1: "Зал", 2: "Кухня", 3: "Ванная", 4: "Прихожая" },
+    // правки карты: ниша под кроватью — пол зала (робот туда не заезжает), её настоящие стены
+    // комнаты прямоугольниками (координаты карты пылесоса, клетки по 5 см): ровные стены вместо рваных краёв лидара
+    geo: {
+      rooms: {
+        2: [[1, 1, 44, 54], [44, 20, 86, 53]],
+        4: [[4, 57, 44, 118], [1, 66, 3, 86]],
+        3: [[47, 61, 87, 110]],
+        1: [[10, 121, 87, 153], [47, 113, 87, 120], [12, 154, 98, 204]],
+      },
+      doors: [[13, 55, 33, 56, 4], [45, 90, 46, 100, 4], [20, 119, 36, 120, 1]],
+    },
     items: [
-      // зал: у левой стены — вешалка, база пылесоса, стол с ПК и роутером; окно с батареей; кровать изголовьем к правой стене
-      it("rack", 9, 124, 3), it("dock", 12, 164, 3), it("weights", 22, 165), it("desk", 12, 176, 3),
-      it("pc", 13, 197, 3), it("router", 13, 191, 3), it("chair", 25, 183, 1),
-      it("window", 18, 203, 2), it("radiator", 22, 201, 2), it("scale", 40, 195), it("beanbag", 44, 187), it("mic", 64, 190),
-      it("bed", 59, 156, 1), it("table", 68, 187), it("power", 87, 192), it("fan", 59, 196), it("ac", 93, 188, 1),
-      it("lamp", 51, 175, 0, 0, 0, { room: "Зал" }), it("switch", 49, 139, 1, 0, 0, { room: "Зал" }),
+      // зал — по скану Scaniverse, совмещённому с картой: вдоль западной стены вешалка, база пылесоса (точка зарядки) и стол
+      // с ПК в углу; у южной стены батарея под окном, в углу кресло-мешок; кровать изголовьем к северу — в нише, куда робот не заезжает
+      it("rack", 9, 121, 3, 34, 9), it("weights", 20, 158), it("dock", 11, 163, 3), it("desk", 11, 179, 3, 26, 13),
+      it("pc", 12, 198, 3), it("router", 12, 191, 3), it("chair", 26, 186, 1),
+      it("window", 34, 203, 2, 26, 3), it("radiator", 39, 201, 2), it("scale", 31, 197), it("beanbag", 67, 187), it("fan", 60, 181), it("mic", 85, 194),
+      it("bed", 50, 113, 0, 32, 38), it("table", 58, 152), it("power", 76, 152), it("ac", 94, 184, 1),
+      it("lamp", 54, 168, 0, 0, 0, { room: "Зал" }), it("switch", 46, 124, 1, 0, 0, { room: "Зал" }),
       // кухня (снято от балкона: проём в прихожую — в дальней стене): справа от проёма холодильник и мойка с навесными шкафами,
       // в дальнем углу игровое кресло, вдоль правой стены диванчик, посередине сушилка; у камеры плита, слева тумба с красным шкафчиком
       it("window", 28, 0, 0, 18, 3, { c: "#45454c" }), it("stove", 14, 1, 0), it("lowcab", 1, 10, 3, 16, 10), it("wallcab", 1, 10, 3, 16, 6),
@@ -474,7 +486,7 @@ function plDefault() {
       it("lamp", 22, 28, 0, 0, 0, { room: "Кухня" }), it("switch", 13, 55, 2, 0, 0, { room: "Кухня" }),
       // прихожая
       it("door", 0, 70, 3), it("rug", 3, 72, 3, 14, 9, { c: "#2f3033" }), it("shoes", 3, 58), it("intercom", 0, 89, 3), it("switch", 0, 65, 3, 0, 0, { room: "Прихожая" }),
-      it("mirrorwr", 1, 89, 3), it("dresser", 2, 103, 3), it("wardrobe", 35, 58, 1), it("idoor", 43, 92, 1),
+      it("mirrorwr", 1, 89, 3), it("dresser", 2, 103, 3), it("wardrobe", 32, 58, 1), it("idoor", 43, 92, 1),
       it("switch", 34, 87, 1, 0, 0, { room: "Ванная" }), it("bulb", 18, 86, 0, 0, 0, { room: "Прихожая" }),
       // ванная
       it("bath", 71, 57, 1), it("toilet", 73, 97, 1), it("sink", 47, 62, 3), it("washer", 47, 75, 3),
@@ -490,7 +502,7 @@ function plRefreshMaps() { (window.zhMaps || []).forEach((m) => { m._dirty = tru
 async function plLoad() {
   try {
     const p = await api("/api/home/plan");
-    window.zhPlan = p && p.v === 4 && Array.isArray(p.items) ? p : plDefault();
+    window.zhPlan = p && p.v === 6 && Array.isArray(p.items) ? p : plDefault();
     plLoad.ok = true;
   } catch (e) { if (!window.zhPlan) window.zhPlan = plDefault(); }
   plRefreshMaps();
@@ -609,15 +621,19 @@ function plProps() {
 }
 
 // экран ↔ клетки карты (вид сверху: yaw = 0)
-function plToCell(px, py) { const P = ple.top && ple.top._proj; if (!P) return null; return [(px - P.OX) / P.s + P.cx, (py - P.OY) / (P.s * P.sinT) + P.cy]; }
-function plToPx(x, y) { const P = ple.top._proj; return [P.OX + (x - P.cx) * P.s, P.OY + (y - P.cy) * P.s * P.sinT]; }
+// картинка отражена относительно карты пылесоса (как в жизни) — переводим обратно в координаты карты
+function plMirY(y) { return ple.top && ple.top.mir ? ple.top.h - y : y; }
+function plToCell(px, py) { const P = ple.top && ple.top._proj; if (!P) return null; return [(px - P.OX) / P.s + P.cx, plMirY((py - P.OY) / (P.s * P.sinT) + P.cy)]; }
+function plToPx(x, y) { const P = ple.top._proj; return [P.OX + (x - P.cx) * P.s, P.OY + (plMirY(y) - P.cy) * P.s * P.sinT]; }
+// углы предмета на экране: верхний левый и нижний правый (с учётом отражения)
+function plRectPx(it) { const a = plToPx(it.x, it.y), b = plToPx(it.x + it.w, it.y + it.h); return [[Math.min(a[0], b[0]), Math.min(a[1], b[1])], [Math.max(a[0], b[0]), Math.max(a[1], b[1])]]; }
 function plOverlay() {
   const ov = ple.ov, top = ple.top; if (!ov || !top || !top._proj) return;
   const W = top.W, H = top.H, dpr = top.dpr;
   if (ov.width !== Math.round(W * dpr) || ov.height !== Math.round(H * dpr)) { ov.width = Math.round(W * dpr); ov.height = Math.round(H * dpr); }
   const x = ov.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
   const it = plItem(); if (!it) return;
-  const a = plToPx(it.x, it.y), b = plToPx(it.x + it.w, it.y + it.h);
+  const [a, b] = plRectPx(it);
   x.strokeStyle = "#ff5a1f"; x.lineWidth = 2; x.setLineDash([5, 3]); x.strokeRect(a[0] - 2, a[1] - 2, b[0] - a[0] + 4, b[1] - a[1] + 4); x.setLineDash([]);
   x.fillStyle = "#ff5a1f"; x.fillRect(b[0] - 4, b[1] - 4, 10, 10);
   const ty = PL_TYPES[it.t] || {}; x.font = "600 12px Inter, sans-serif"; x.textAlign = "left"; x.textBaseline = "bottom";
@@ -626,14 +642,14 @@ function plOverlay() {
 function plHit(px, py) {
   const q = plToCell(px, py); if (!q) return {};
   const [x, y] = q, items = window.zhPlan.items || [], sel = plItem();
-  if (sel) { const h = plToPx(sel.x + sel.w, sel.y + sel.h); if (Math.abs(px - h[0]) < 10 && Math.abs(py - h[1]) < 10) return { it: sel, resize: true, x, y }; }
+  if (sel) { const h = plRectPx(sel)[1]; if (Math.abs(px - h[0]) < 10 && Math.abs(py - h[1]) < 10) return { it: sel, resize: true, x, y }; }
   let best = null; // при наложении берём самый маленький предмет (роутер на столе, коврик под дверью…)
   for (const it of items) if (x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + it.h && (!best || it.w * it.h < best.w * best.h)) best = it;
   return { it: best, x, y };
 }
 function plDown(e) {
   const r = ple.ov.getBoundingClientRect(), hit = plHit(e.clientX - r.left, e.clientY - r.top);
-  if (hit.it) { ple.sel = hit.it.id; ple.drag = { it: hit.it, resize: !!hit.resize, dx: hit.x - hit.it.x, dy: hit.y - hit.it.y }; e.preventDefault(); }
+  if (hit.it) { ple.sel = hit.it.id; ple.drag = { it: hit.it, resize: !!hit.resize, dx: hit.x - hit.it.x, dy: hit.y - hit.it.y, top: hit.it.y + hit.it.h, bottom: hit.it.y }; e.preventDefault(); }
   else ple.sel = null;
   plProps(); plOverlay();
 }
@@ -641,7 +657,11 @@ function plMove(e) {
   if (!ple.drag || !ple.ov) return;
   const r = ple.ov.getBoundingClientRect(), q = plToCell(e.clientX - r.left, e.clientY - r.top); if (!q) return;
   const it = ple.drag.it;
-  if (ple.drag.resize) { it.w = Math.max(1, Math.round(q[0] - it.x)); it.h = Math.max(1, Math.round(q[1] - it.y)); }
+  if (ple.drag.resize) {
+    it.w = Math.max(1, Math.round(q[0] - it.x));
+    if (ple.top.mir) { const top = ple.drag.top; it.y = Math.min(top - 1, Math.round(q[1])); it.h = top - it.y; } // нижний край на экране — меньший y карты
+    else it.h = Math.max(1, Math.round(q[1] - it.y));
+  }
   else { it.x = Math.round(q[0] - ple.drag.dx); it.y = Math.round(q[1] - ple.drag.dy); }
   ple.dirty = true; $("#planMsg").textContent = "Есть несохранённые изменения"; plRefreshMaps();
 }
