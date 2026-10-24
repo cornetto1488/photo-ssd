@@ -429,7 +429,7 @@ func (p *homePortal) statsLoop() {
 		if now.After(nextLights) {
 			nextLights = now.Add(3 * time.Minute)
 			if p.tuya != nil {
-				go p.devices(true)
+				go p.devices(false) // из кэша: облако само не чаще раза в 10 минут
 			}
 		}
 		if now.After(nextSpeed) {

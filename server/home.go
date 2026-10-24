@@ -276,7 +276,7 @@ func toFloat(v any) float64 {
 	return 0
 }
 
-var snapListAt time.Time // под devMu
+var snapListAt, cloudListAt time.Time // под devMu
 
 func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 	if p.tuya == nil {
@@ -287,7 +287,15 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 	if !force && time.Since(p.devAt) < 8*time.Second && p.devs != nil {
 		return p.devs, nil
 	}
-	out, err := p.tuya.call("GET", "/v1.0/iot-01/associated-users/devices?size=100", "")
+	// облако — не чаще раза в 10 минут: между запросами список из снимка, состояние по сети (бережём квоту Tuya)
+	var out map[string]any
+	var err error
+	if !force && !snapListAt.IsZero() && time.Since(cloudListAt) < 10*time.Minute {
+		err = errors.New("облако: пауза между запросами")
+	} else {
+		out, err = p.tuya.call("GET", "/v1.0/iot-01/associated-users/devices?size=100", "")
+		cloudListAt = time.Now()
+	}
 	cloudOK := err == nil
 	var list []any
 	if cloudOK {
