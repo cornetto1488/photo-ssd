@@ -177,6 +177,7 @@ type homePortal struct {
 	roomsAt time.Time
 	pin     *pinAuth
 	local   *tuyaLocal
+	sl      *smartLife // вход через приложение Smart Life (без квоты кабинета разработчика)
 	tokenFile string
 	pw        *pwVault
 }
@@ -191,6 +192,9 @@ func newPortal(s *server, tuyaConf, proxyTo, pcIP, pcMAC, pinFile, tokenFile str
 	if p.tuya != nil {
 		p.local = newTuyaLocal(p)
 		p.local.restore()
+		if p.sl = loadSmartLife("/etc/photossd-smartlife.json"); p.sl != nil {
+			go p.pcFlagLoop()
+		}
 		go p.local.pollLoop()
 		go func() {
 			for {
@@ -290,7 +294,24 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 	// облако — не чаще раза в 10 минут: между запросами список из снимка, состояние по сети (бережём квоту Tuya)
 	var out map[string]any
 	var err error
-	if !force && !snapListAt.IsZero() && time.Since(cloudListAt) < 10*time.Minute {
+	// Smart Life: список и состояние без квоты кабинета разработчика
+	var slList []any
+	slDev := map[string]map[string]any{}
+	if p.sl != nil {
+		if l, e := p.sl.devices(15 * time.Second); e == nil && len(l) > 0 {
+			slList = l
+			for _, d := range l {
+				if dm, ok := d.(map[string]any); ok {
+					slDev[fmt.Sprint(dm["id"])] = dm
+				}
+			}
+		} else if e != nil {
+			log.Printf("smart life: %v", e)
+		}
+	}
+	if slList != nil {
+		err = errors.New("облако разработчика не нужно: есть Smart Life")
+	} else if !force && !snapListAt.IsZero() && time.Since(cloudListAt) < 10*time.Minute {
 		err = errors.New("облако: пауза между запросами")
 	} else {
 		out, err = p.tuya.call("GET", "/v1.0/iot-01/associated-users/devices?size=100", "")
@@ -304,6 +325,17 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 		if len(list) > 0 && time.Since(snapListAt) > 10*time.Minute { // снимок на диск — не чаще раза в 10 минут
 			snapListAt = time.Now()
 			p.saveSnap(func(s *tuyaSnap) { s.List = list })
+		}
+	} else if slList != nil {
+		list = slList
+		if time.Since(snapListAt) > 10*time.Minute {
+			snapListAt = time.Now()
+			p.saveSnap(func(s *tuyaSnap) { s.List = slList })
+		}
+		if len(p.rooms) == 0 {
+			if snap := p.loadSnap(); snap != nil && snap.Rooms != nil {
+				p.rooms = snap.Rooms
+			}
 		}
 	} else {
 		// облако не отвечает (квота, интернет) — список из снимка, состояние по домашней сети
@@ -356,7 +388,7 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 		hd.Online, _ = dm["online"].(bool)
 		if p.local != nil && p.local.fresh(id) {
 			hd.Online = true
-		} else if !cloudOK {
+		} else if !cloudOK && slList == nil {
 			if pd, ok := prev[id]; ok {
 				hd.Online = pd.Online
 			}
@@ -385,6 +417,9 @@ func (p *homePortal) devices(force bool) ([]homeDevice, error) {
 			// сначала — что устройство само ответило по сети (без облака и квот), иначе облако, иначе прежнее
 			if p.local != nil {
 				devs[i].Status = p.local.codes(devs[i].ID, devs[i].ProductID)
+			}
+			if len(devs[i].Status) == 0 && slDev[devs[i].ID] != nil {
+				devs[i].Status = slStatusOf(slDev[devs[i].ID])
 			}
 			if len(devs[i].Status) == 0 && cloudOK {
 				devs[i].Status = p.state(devs[i].ID)
@@ -451,8 +486,12 @@ func (p *homePortal) command(id string, cmds []deviceState) error {
 		}
 	}
 	if err != nil || p.local == nil || !p.local.known(id) {
-		body, _ := json.Marshal(map[string]any{"commands": cmds})
-		_, err = p.tuya.call("POST", "/v1.0/iot-03/devices/"+id+"/commands", string(body))
+		if p.sl != nil { // через Smart Life — без квоты кабинета разработчика
+			err = p.sl.command(id, cmds)
+		} else {
+			body, _ := json.Marshal(map[string]any{"commands": cmds})
+			_, err = p.tuya.call("POST", "/v1.0/iot-03/devices/"+id+"/commands", string(body))
+		}
 	}
 	if err == nil {
 		isLight := false
